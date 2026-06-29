@@ -97,7 +97,7 @@ body {
   transform: translate(-100%, -50%);
 }
 
-/* Mouth open ratio HUD below preview center. */
+/* Mouth shape HUD below preview center. */
 .mouth-hud {
   transform: translate(-50%, -50%);
 }
