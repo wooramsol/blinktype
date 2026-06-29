@@ -11,14 +11,13 @@ import {
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
 import pkg from '../package.json';
-import { versionLabel } from './buildRef';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 app.innerHTML = `
   <div class="layout">
     <div class="title-row">
-      <h1 class="title"># BlinkType ${versionLabel(pkg.version)}</h1>
+      <h1 class="title"># BlinkType v${pkg.version}</h1>
       <span class="credit">@wooramsol</span>
     </div>
     <div id="video-wrap" class="video-wrap">
