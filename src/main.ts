@@ -1,18 +1,12 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector, eyeHudAnchor, minEar, averageEar } from './lib/eyeBlink';
+import { BlinkDetector, eyeHudAnchor } from './lib/eyeBlink';
 import {
   MorseStateMachine,
   DEFAULT_MORSE_TIMING,
   morseToDisplay,
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
-import {
-  connectSystemTyper,
-  insertIntoFocusedField,
-  onSystemTyperStatus,
-  typeSystemText,
-} from './lib/systemTyper';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
@@ -20,7 +14,6 @@ app.innerHTML = `
   <div class="layout">
     <header class="header">
       <h1>Blinktype</h1>
-      <p id="typing-status" class="typing-status">Global typing: starting…</p>
     </header>
 
     <main class="main">
@@ -40,7 +33,6 @@ const video = document.querySelector<HTMLVideoElement>('#video')!;
 const output = document.querySelector<HTMLTextAreaElement>('#output')!;
 const earLabel = document.querySelector<HTMLDivElement>('#ear-label')!;
 const cameraError = document.querySelector<HTMLDivElement>('#camera-error')!;
-const typingStatus = document.querySelector<HTMLParagraphElement>('#typing-status')!;
 
 let stream: MediaStream | null = null;
 let rafId = 0;
@@ -90,17 +82,10 @@ function onUserEdit(): void {
   morseMachine.reset();
 }
 
-function emitTypedText(text: string): void {
-  if (!typeSystemText(text)) {
-    insertIntoFocusedField(text, output);
-  }
-}
-
 const morseMachine = new MorseStateMachine(
   DEFAULT_MORSE_TIMING,
   (event: MorseCommitEvent) => {
     const text = event.type === 'space' ? ' ' : event.char;
-    emitTypedText(text);
     committedText += text;
     pendingBuffer = '';
     syncOutput();
@@ -118,37 +103,18 @@ function positionEarLabel(landmarks: { x: number; y: number }[]): void {
   earLabel.hidden = false;
 }
 
-async function tuneCameraBrightness(track: MediaStreamTrack): Promise<void> {
-  const caps = track.getCapabilities?.() as MediaTrackCapabilities & {
-    exposureCompensation?: { min: number; max: number };
-  };
-  const advanced: Record<string, unknown>[] = [{ exposureMode: 'continuous' }];
-
-  if (caps?.exposureCompensation) {
-    const boost = Math.min(1, caps.exposureCompensation.max);
-    advanced.push({ exposureCompensation: boost });
-  }
-
-  try {
-    await track.applyConstraints({ advanced } as MediaTrackConstraints);
-  } catch {
-    // Best-effort; unsupported on some browsers.
-  }
-}
-
 async function loop(): Promise<void> {
   if (!engine || !stream) return;
   const now = performance.now();
   const frame = engine.detect(video, now);
 
   if (frame) {
-    const displayEar = averageEar(frame.landmarks);
-    const trackEar = minEar(frame.landmarks);
+    const { ear } = frame;
 
-    earLabel.textContent = `EAR ${displayEar.toFixed(3)}`;
+    earLabel.textContent = `EAR ${ear.toFixed(3)}`;
     positionEarLabel(frame.landmarks);
 
-    const blink = blinkDetector.update(trackEar, now);
+    const blink = blinkDetector.update(ear, now);
     if (blink) {
       morseMachine.onBlink(blink, now);
     }
@@ -164,15 +130,9 @@ async function startCamera(): Promise<void> {
     engine = new FaceLandmarkerEngine();
     await engine.init();
     stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'user',
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      } as MediaTrackConstraints,
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
     });
-    const track = stream.getVideoTracks()[0];
-    if (track) await tuneCameraBrightness(track);
     video.srcObject = stream;
     await video.play();
     cameraError.hidden = true;
@@ -189,13 +149,6 @@ async function startCamera(): Promise<void> {
   }
 }
 
-onSystemTyperStatus((online) => {
-  typingStatus.textContent = online
-    ? 'Global typing: connected'
-    : 'Global typing: run `npm run type-bridge` locally, then focus any app';
-});
-
 output.addEventListener('input', onUserEdit);
 
-connectSystemTyper();
 void startCamera();

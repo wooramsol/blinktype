@@ -22,10 +22,6 @@ export function averageEar(landmarks: Point2D[]): number {
   return (eyeAspectRatio(landmarks, LEFT_EYE) + eyeAspectRatio(landmarks, RIGHT_EYE)) / 2;
 }
 
-export function minEar(landmarks: Point2D[]): number {
-  return Math.min(eyeAspectRatio(landmarks, LEFT_EYE), eyeAspectRatio(landmarks, RIGHT_EYE));
-}
-
 /** Normalized anchor above the eyes for HUD placement (mirrored display uses 1 - x). */
 export function eyeHudAnchor(landmarks: Point2D[]): Point2D {
   const left = landmarks[33];
@@ -37,25 +33,17 @@ export function eyeHudAnchor(landmarks: Point2D[]): Point2D {
 }
 
 export interface BlinkDetectorConfig {
+  closedThreshold: number;
+  openThreshold: number;
   dotMaxMs: number;
   minBlinkMs: number;
-  closeRatio: number;
-  openRatio: number;
-  reopenDelta: number;
-  longHoldMs: number;
-  baselineAlpha: number;
-  initialBaseline: number;
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
-  dotMaxMs: 420,
-  minBlinkMs: 35,
-  closeRatio: 0.78,
-  openRatio: 0.9,
-  reopenDelta: 0.05,
-  longHoldMs: 220,
-  baselineAlpha: 0.05,
-  initialBaseline: 0.52,
+  closedThreshold: 0.21,
+  openThreshold: 0.24,
+  dotMaxMs: 280,
+  minBlinkMs: 80,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
@@ -68,61 +56,24 @@ export interface BlinkEvent {
 export class BlinkDetector {
   private eyesClosed = false;
   private closeStartedAt = 0;
-  private belowCloseSince = 0;
-  private inLongHold = false;
-  private valleyEar = 1;
-  private baselineEar: number;
 
-  constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {
-    this.baselineEar = config.initialBaseline;
-  }
+  constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
   update(ear: number, now = performance.now()): BlinkEvent | null {
-    if (!this.eyesClosed) {
-      this.baselineEar += this.config.baselineAlpha * (ear - this.baselineEar);
-    }
-
-    const closeAt = this.baselineEar * this.config.closeRatio;
-    const openAt = this.baselineEar * this.config.openRatio;
-
-    if (!this.eyesClosed && ear < closeAt) {
+    if (!this.eyesClosed && ear < this.config.closedThreshold) {
       this.eyesClosed = true;
       this.closeStartedAt = now;
-      this.belowCloseSince = now;
-      this.inLongHold = false;
-      this.valleyEar = ear;
       return null;
     }
 
-    if (this.eyesClosed) {
-      this.valleyEar = Math.min(this.valleyEar, ear);
-
-      if (ear < closeAt) {
-        if (!this.belowCloseSince) this.belowCloseSince = now;
-        if (!this.inLongHold && now - this.belowCloseSince >= this.config.longHoldMs) {
-          this.inLongHold = true;
-        }
-      } else {
-        this.belowCloseSince = 0;
-      }
-
+    if (this.eyesClosed && ear > this.config.openThreshold) {
+      this.eyesClosed = false;
       const durationMs = now - this.closeStartedAt;
-      const fullyOpen = ear >= openAt;
-      const recoveredFromValley = ear >= this.valleyEar + this.config.reopenDelta;
-      const quickReopen = recoveredFromValley && ear >= closeAt;
-
-      const shouldEnd = this.inLongHold ? fullyOpen : fullyOpen || quickReopen;
-
-      if (shouldEnd) {
-        this.eyesClosed = false;
-        this.inLongHold = false;
-        this.belowCloseSince = 0;
-        if (durationMs < this.config.minBlinkMs) return null;
-        return {
-          symbol: durationMs <= this.config.dotMaxMs ? 'dot' : 'dash',
-          durationMs,
-        };
-      }
+      if (durationMs < this.config.minBlinkMs) return null;
+      return {
+        symbol: durationMs <= this.config.dotMaxMs ? 'dot' : 'dash',
+        durationMs,
+      };
     }
 
     return null;

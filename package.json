@@ -6,15 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "type-bridge": "node scripts/type-bridge.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.21"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
-    "vite": "^6.3.5",
-    "ws": "^8.18.3"
+    "vite": "^6.3.5"
   }
 }

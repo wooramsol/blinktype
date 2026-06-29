@@ -25,14 +25,8 @@ body {
 }
 
 .header h1 {
-  margin: 0;
+  margin: 0 0 0.75rem;
   font-size: clamp(1.25rem, 3vw, 1.5rem);
-}
-
-.typing-status {
-  margin: 0.35rem 0 0.75rem;
-  font-size: 0.8rem;
-  color: var(--muted);
 }
 
 .main {
@@ -44,7 +38,6 @@ body {
   position: relative;
   border-radius: 12px;
   overflow: hidden;
-  background: #1e2433;
   border: 1px solid var(--border);
   aspect-ratio: 4 / 3;
 }
@@ -55,21 +48,21 @@ body {
   height: 100%;
   object-fit: cover;
   transform: scaleX(-1);
+  filter: none;
+  opacity: 1;
 }
 
 .ear-label {
   position: absolute;
   transform: translate(-50%, -100%);
   margin-top: -4px;
-  padding: 0.2rem 0.45rem;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.82);
-  color: #111827;
-  font: 0.75rem/1.2 ui-monospace, monospace;
+  padding: 0.15rem 0.35rem;
+  font: 600 0.8rem/1.2 ui-monospace, monospace;
+  color: #fff;
+  text-shadow: 0 0 3px #000, 0 0 8px #000, 0 1px 2px #000;
   pointer-events: none;
   z-index: 2;
   white-space: nowrap;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18);
 }
 
 .camera-error {
@@ -79,7 +72,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(20, 27, 47, 0.75);
+  background: var(--panel);
   color: var(--muted);
   font-size: 0.9rem;
   text-align: center;
