@@ -118,18 +118,12 @@ export interface BlinkDetectorConfig {
   closedThreshold: number;
   openThreshold: number;
   minBlinkMs: number;
-  /** Eye must stay open this long before the next wink can start. */
-  minOpenBeforeCloseMs: number;
-  /** Ignore further winks for this long after one registers. */
-  refractoryMs: number;
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   closedThreshold: 0.21,
   openThreshold: 0.24,
   minBlinkMs: 80,
-  minOpenBeforeCloseMs: 120,
-  refractoryMs: 280,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
@@ -144,13 +138,11 @@ export interface BlinkEvent {
 type EyeState = {
   closed: boolean;
   closeStartedAt: number;
-  openSince: number;
 };
 
 export class BlinkDetector {
-  private left: EyeState = { closed: false, closeStartedAt: 0, openSince: 0 };
-  private right: EyeState = { closed: false, closeStartedAt: 0, openSince: 0 };
-  private lastEventAt = 0;
+  private left: EyeState = { closed: false, closeStartedAt: 0 };
+  private right: EyeState = { closed: false, closeStartedAt: 0 };
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
@@ -160,12 +152,7 @@ export class BlinkDetector {
     const rightEvent = this.updateEye('right', rightEar, leftEar, this.right, now);
 
     if (leftEvent && rightEvent) return null;
-    const event = leftEvent ?? rightEvent;
-    if (!event) return null;
-
-    if (now - this.lastEventAt < this.config.refractoryMs) return null;
-    this.lastEventAt = now;
-    return event;
+    return leftEvent ?? rightEvent;
   }
 
   private updateEye(
@@ -175,22 +162,11 @@ export class BlinkDetector {
     state: EyeState,
     now: number,
   ): BlinkEvent | null {
-    if (ear > this.config.openThreshold) {
-      if (!state.closed && state.openSince === 0) {
-        state.openSince = now;
-      }
-    } else if (ear < this.config.closedThreshold) {
-      state.openSince = 0;
-    }
-
     if (
       !state.closed &&
       ear < this.config.closedThreshold &&
       otherEar > this.config.openThreshold
     ) {
-      if (state.openSince === 0 || now - state.openSince < this.config.minOpenBeforeCloseMs) {
-        return null;
-      }
       state.closed = true;
       state.closeStartedAt = now;
       return null;
@@ -198,7 +174,6 @@ export class BlinkDetector {
 
     if (state.closed && ear > this.config.openThreshold) {
       state.closed = false;
-      state.openSince = now;
       const durationMs = now - state.closeStartedAt;
       if (durationMs < this.config.minBlinkMs) return null;
       if (otherEar <= this.config.openThreshold) return null;
