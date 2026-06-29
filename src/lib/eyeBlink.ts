@@ -153,8 +153,8 @@ export interface BlinkDetectorConfig {
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
-  closedThreshold: 0.23,
-  rearmThreshold: 0.248,
+  closedThreshold: 0.24,
+  rearmThreshold: 0.246,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
@@ -187,7 +187,7 @@ export class BlinkDetector {
   }
 
   private otherEyeOpen(otherEar: number): boolean {
-    return otherEar > this.config.closedThreshold - 0.03;
+    return otherEar > this.config.closedThreshold - 0.04;
   }
 
   private updateEye(
