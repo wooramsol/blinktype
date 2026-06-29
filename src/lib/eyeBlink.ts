@@ -1,5 +1,8 @@
 const LEFT_EYE = [33, 160, 158, 133, 153, 144] as const;
 const RIGHT_EYE = [362, 385, 387, 263, 373, 380] as const;
+/** Brow arc above each eye — included in blink openness. */
+const LEFT_BROW_NEAR = [107, 66, 105] as const;
+const RIGHT_BROW_NEAR = [336, 296, 334] as const;
 
 export interface Point2D {
   x: number;
@@ -10,6 +13,17 @@ function dist(a: Point2D, b: Point2D): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+function centroid(points: Point2D[]): Point2D {
+  const n = points.length || 1;
+  let x = 0;
+  let y = 0;
+  for (const p of points) {
+    x += p.x;
+    y += p.y;
+  }
+  return { x: x / n, y: y / n };
+}
+
 export function eyeAspectRatio(landmarks: Point2D[], indices: readonly number[]): number {
   const [p1, p2, p3, p4, p5, p6] = indices.map((i) => landmarks[i]);
   const vertical = dist(p2, p6) + dist(p3, p5);
@@ -18,9 +32,62 @@ export function eyeAspectRatio(landmarks: Point2D[], indices: readonly number[])
   return vertical / (2 * horizontal);
 }
 
-export function averageEar(landmarks: Point2D[]): number {
-  return (eyeAspectRatio(landmarks, LEFT_EYE) + eyeAspectRatio(landmarks, RIGHT_EYE)) / 2;
+/** Lid aperture + brow-to-upper-lid gap, normalized by eye width. */
+export function eyeBrowOpenRatio(
+  landmarks: Point2D[],
+  eye: readonly number[],
+  brow: readonly number[],
+): number {
+  const [p1, p2, p3, p4, p5, p6] = eye.map((i) => landmarks[i]);
+  const lidVertical = dist(p2, p6) + dist(p3, p5);
+  const horizontal = dist(p1, p4);
+  if (horizontal === 0) return 1;
+
+  const browCenter = centroid(brow.map((i) => landmarks[i]));
+  const upperLid = { x: (p2.x + p3.x) / 2, y: (p2.y + p3.y) / 2 };
+  const browGap = dist(browCenter, upperLid);
+
+  return (lidVertical + browGap) / (2 * horizontal);
 }
+
+/** Eye + brow combined openness (used for wink detection and HUD). */
+export function eyeOpenness(
+  landmarks: Point2D[],
+  eye: readonly number[],
+  brow: readonly number[],
+): number {
+  const ear = eyeAspectRatio(landmarks, eye);
+  const ebr = eyeBrowOpenRatio(landmarks, eye, brow);
+  return ear * 0.5 + ebr * 0.5;
+}
+
+export function averageEar(landmarks: Point2D[]): number {
+  return (
+    eyeOpenness(landmarks, LEFT_EYE, LEFT_BROW_NEAR) +
+    eyeOpenness(landmarks, RIGHT_EYE, RIGHT_BROW_NEAR)
+  ) / 2;
+}
+
+/** Push landmark indices outward from their region centroid (overlay). */
+export function expandLandmarkRegion(
+  landmarks: Point2D[],
+  indices: readonly number[],
+  scale: number,
+): Map<number, Point2D> {
+  const pts = indices.map((i) => landmarks[i]);
+  const center = centroid(pts);
+  const out = new Map<number, Point2D>();
+  for (const i of indices) {
+    const p = landmarks[i];
+    out.set(i, {
+      x: center.x + (p.x - center.x) * scale,
+      y: center.y + (p.y - center.y) * scale,
+    });
+  }
+  return out;
+}
+
+export const EYE_OVERLAY_EXPAND = 1.1;
 
 type ScreenEye = {
   ear: number;
@@ -48,7 +115,7 @@ function selfieViewX(landmarkX: number): number {
 
 function mpLeftEye(landmarks: Point2D[]): ScreenEye {
   return {
-    ear: eyeAspectRatio(landmarks, LEFT_EYE),
+    ear: eyeOpenness(landmarks, LEFT_EYE, LEFT_BROW_NEAR),
     outer: landmarks[33],
     centerY: leftEyeCenterY(landmarks),
   };
@@ -56,7 +123,7 @@ function mpLeftEye(landmarks: Point2D[]): ScreenEye {
 
 function mpRightEye(landmarks: Point2D[]): ScreenEye {
   return {
-    ear: eyeAspectRatio(landmarks, RIGHT_EYE),
+    ear: eyeOpenness(landmarks, RIGHT_EYE, RIGHT_BROW_NEAR),
     outer: landmarks[263],
     centerY: rightEyeCenterY(landmarks),
   };
@@ -121,8 +188,8 @@ export interface BlinkDetectorConfig {
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
-  closedThreshold: 0.21,
-  openThreshold: 0.24,
+  closedThreshold: 0.24,
+  openThreshold: 0.28,
   minBlinkMs: 80,
 };
 
