@@ -117,9 +117,11 @@ function backspaceOutput(): void {
   syncOutput();
 }
 
-function positionEarLabels(landmarks: { x: number; y: number }[]): void {
-  const eyes = selfieScreenEyes(landmarks);
-  const { screenLeft, screenRight } = selfieEarLabelAnchors(landmarks);
+function positionEarLabels(
+  landmarks: { x: number; y: number }[],
+  eyes: ReturnType<typeof selfieScreenEyes>,
+): void {
+  const { screenLeft, screenRight } = selfieEarLabelAnchors(landmarks, eyes);
 
   earLabelLeft.textContent = `L ${eyes.screenLeft.ear.toFixed(3)}`;
   earLabelLeft.style.left = `${screenLeft.x * 100}%`;
@@ -195,7 +197,7 @@ async function loop(): Promise<void> {
       drawFaceOverlay(overlayCtx, frame.landmarks);
 
       const eyes = selfieScreenEyes(frame.landmarks);
-      positionEarLabels(frame.landmarks);
+      positionEarLabels(frame.landmarks, eyes);
 
       const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
       if (blink) {
