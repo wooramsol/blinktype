@@ -42,16 +42,18 @@ export interface BlinkDetectorConfig {
   closeRatio: number;
   openRatio: number;
   reopenDelta: number;
+  longHoldMs: number;
   baselineAlpha: number;
   initialBaseline: number;
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
-  dotMaxMs: 360,
+  dotMaxMs: 420,
   minBlinkMs: 35,
   closeRatio: 0.78,
   openRatio: 0.9,
   reopenDelta: 0.05,
+  longHoldMs: 220,
   baselineAlpha: 0.05,
   initialBaseline: 0.52,
 };
@@ -66,6 +68,8 @@ export interface BlinkEvent {
 export class BlinkDetector {
   private eyesClosed = false;
   private closeStartedAt = 0;
+  private belowCloseSince = 0;
+  private inLongHold = false;
   private valleyEar = 1;
   private baselineEar: number;
 
@@ -84,18 +88,35 @@ export class BlinkDetector {
     if (!this.eyesClosed && ear < closeAt) {
       this.eyesClosed = true;
       this.closeStartedAt = now;
+      this.belowCloseSince = now;
+      this.inLongHold = false;
       this.valleyEar = ear;
       return null;
     }
 
     if (this.eyesClosed) {
       this.valleyEar = Math.min(this.valleyEar, ear);
-      const recoveredFromValley = ear >= this.valleyEar + this.config.reopenDelta;
-      const fullyOpen = ear >= openAt;
 
-      if (recoveredFromValley || fullyOpen) {
+      if (ear < closeAt) {
+        if (!this.belowCloseSince) this.belowCloseSince = now;
+        if (!this.inLongHold && now - this.belowCloseSince >= this.config.longHoldMs) {
+          this.inLongHold = true;
+        }
+      } else {
+        this.belowCloseSince = 0;
+      }
+
+      const durationMs = now - this.closeStartedAt;
+      const fullyOpen = ear >= openAt;
+      const recoveredFromValley = ear >= this.valleyEar + this.config.reopenDelta;
+      const quickReopen = recoveredFromValley && ear >= closeAt;
+
+      const shouldEnd = this.inLongHold ? fullyOpen : fullyOpen || quickReopen;
+
+      if (shouldEnd) {
         this.eyesClosed = false;
-        const durationMs = now - this.closeStartedAt;
+        this.inLongHold = false;
+        this.belowCloseSince = 0;
         if (durationMs < this.config.minBlinkMs) return null;
         return {
           symbol: durationMs <= this.config.dotMaxMs ? 'dot' : 'dash',
