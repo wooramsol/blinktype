@@ -10,6 +10,7 @@ import {
   morseToDisplay,
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
+import { MorseAudio } from './lib/morseAudio';
 import pkg from '../package.json';
 import { versionLabel } from './buildRef';
 
@@ -49,6 +50,7 @@ let starting = false;
 const blinkDetector = new BlinkDetector();
 const headShakeDetector = new HeadShakeDetector();
 const mouthOpenDetector = new MouthOpenDetector();
+const morseAudio = new MorseAudio();
 let committedText = '';
 let pendingBuffer = '';
 
@@ -203,6 +205,7 @@ async function loop(): Promise<void> {
 
       const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
       if (blink) {
+        morseAudio.play(blink.symbol);
         morseMachine.onBlink(blink, now);
       } else if (mouthOpenDetector.update(mouthOpenRatio(frame.landmarks), now)) {
         morseMachine.onMouthSpace(now);
@@ -250,6 +253,7 @@ async function startCamera(): Promise<void> {
 }
 
 videoWrap.addEventListener('click', () => {
+  morseAudio.unlock();
   if (!stream && !starting) void startCamera();
 });
 
