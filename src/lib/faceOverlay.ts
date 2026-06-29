@@ -10,6 +10,11 @@ const EYE_CONTOURS: Connection[] = [
   ...FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS,
 ];
 
+const FACE_CONTOURS: Connection[] = [
+  ...FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
+  ...FaceLandmarker.FACE_LANDMARKS_CONTOURS,
+];
+
 function connectionIndices(connections: Connection[]): number[] {
   const indices = new Set<number>();
   for (const { start, end } of connections) {
@@ -41,6 +46,7 @@ export function drawFaceOverlay(
   const h = ctx.canvas.height;
   ctx.clearRect(0, 0, w, h);
 
+  drawConnections(ctx, landmarks, FACE_CONTOURS, w, h, 'rgba(255,255,255,0.45)', 1);
   drawConnections(ctx, landmarks, EYE_CONTOURS, w, h, '#fff', 1);
 
   for (const i of EYE_POINT_INDICES) {

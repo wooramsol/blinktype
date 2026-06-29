@@ -3,12 +3,10 @@ import type { BlinkEvent } from './eyeBlink';
 
 export interface MorseTimingConfig {
   letterGapMs: number;
-  wordGapMs: number;
 }
 
 export const DEFAULT_MORSE_TIMING: MorseTimingConfig = {
-  letterGapMs: 900,
-  wordGapMs: 2000,
+  letterGapMs: 500,
 };
 
 export interface MorseCommitEvent {
@@ -19,9 +17,7 @@ export interface MorseCommitEvent {
 
 export class MorseStateMachine {
   private buffer = '';
-  private lastEventAt = 0;
   private letterTimer: ReturnType<typeof setTimeout> | null = null;
-  private wordTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private timing: MorseTimingConfig = DEFAULT_MORSE_TIMING,
@@ -29,26 +25,21 @@ export class MorseStateMachine {
     private onBufferChange: (buffer: string) => void,
   ) {}
 
-  onBlink(event: BlinkEvent, now = performance.now()): void {
+  onBlink(event: BlinkEvent, _now = performance.now()): void {
     this.clearTimers();
     this.buffer += event.symbol === 'dot' ? '.' : '-';
-    this.lastEventAt = now;
     this.onBufferChange(this.buffer);
     this.scheduleLetterCommit();
-    this.scheduleWordGap();
+  }
+
+  onMouthSpace(_now = performance.now()): void {
+    this.commitLetter();
+    this.onCommit({ type: 'space', morse: '', char: ' ' });
+    this.clearTimers();
   }
 
   private scheduleLetterCommit(): void {
     this.letterTimer = setTimeout(() => this.commitLetter(), this.timing.letterGapMs);
-  }
-
-  private scheduleWordGap(): void {
-    this.wordTimer = setTimeout(() => {
-      const idle = performance.now() - this.lastEventAt;
-      if (idle >= this.timing.wordGapMs && !this.buffer) {
-        this.onCommit({ type: 'space', morse: '', char: ' ' });
-      }
-    }, this.timing.wordGapMs);
   }
 
   private commitLetter(): void {
@@ -57,7 +48,6 @@ export class MorseStateMachine {
     const decoded = decodeMorse(morse);
     this.buffer = '';
     this.onBufferChange('');
-    this.lastEventAt = performance.now();
 
     if (decoded) {
       this.onCommit({ type: 'letter', morse, char: decoded });
@@ -66,7 +56,6 @@ export class MorseStateMachine {
     }
 
     this.clearTimers();
-    this.scheduleWordGap();
   }
 
   reset(): void {
@@ -81,9 +70,7 @@ export class MorseStateMachine {
 
   private clearTimers(): void {
     if (this.letterTimer) clearTimeout(this.letterTimer);
-    if (this.wordTimer) clearTimeout(this.wordTimer);
     this.letterTimer = null;
-    this.wordTimer = null;
   }
 }
 
