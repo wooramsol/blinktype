@@ -1,6 +1,7 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
 import { BlinkDetector, faceSideHudAnchor } from './lib/eyeBlink';
+import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import {
   MorseStateMachine,
   DEFAULT_MORSE_TIMING,
@@ -20,6 +21,7 @@ app.innerHTML = `
       <div id="video-wrap" class="video-wrap">
         <div class="video-mirror">
           <video id="video" autoplay muted playsinline webkit-playsinline></video>
+          <canvas id="overlay"></canvas>
         </div>
         <div id="ear-label" class="ear-label" hidden>EAR —</div>
       </div>
@@ -32,6 +34,8 @@ app.innerHTML = `
 
 const videoWrap = document.querySelector<HTMLDivElement>('#video-wrap')!;
 const video = document.querySelector<HTMLVideoElement>('#video')!;
+const overlay = document.querySelector<HTMLCanvasElement>('#overlay')!;
+const overlayCtx = overlay.getContext('2d')!;
 const output = document.querySelector<HTMLTextAreaElement>('#output')!;
 const earLabel = document.querySelector<HTMLDivElement>('#ear-label')!;
 
@@ -160,6 +164,9 @@ async function loop(): Promise<void> {
   if (isVideoLive() && modelReady && engine) {
     const frame = engine.detect(video, performance.now());
     if (frame) {
+      resizeOverlayCanvas(overlay, video);
+      drawFaceOverlay(overlayCtx, frame.landmarks);
+
       earLabel.textContent = `EAR ${frame.ear.toFixed(3)}`;
       positionEarLabel(frame.landmarks);
 
@@ -169,6 +176,7 @@ async function loop(): Promise<void> {
       }
     } else {
       earLabel.hidden = true;
+      clearFaceOverlay(overlayCtx);
     }
   }
 
