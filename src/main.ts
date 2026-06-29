@@ -17,7 +17,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <div class="layout">
     <div class="title-row">
-      <h1 class="title"># BlinkType v${pkg.version}</h1>
+      <h1 class="title"># BlinkType v${pkg.version} · 3decccc</h1>
       <span class="credit">@wooramsol</span>
     </div>
     <div id="video-wrap" class="video-wrap">
