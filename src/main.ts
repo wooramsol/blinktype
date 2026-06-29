@@ -11,6 +11,7 @@ import {
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
 import { MorseAudio } from './lib/morseAudio';
+import { formatCommittedText, lettersOnly } from './lib/wordSegment';
 import pkg from '../package.json';
 import { versionLabel } from './buildRef';
 
@@ -55,7 +56,17 @@ let committedText = '';
 let pendingBuffer = '';
 
 function displayValue(): string {
-  return committedText + (pendingBuffer ? morseToDisplay(pendingBuffer) : '');
+  const spaced = committedText ? formatCommittedText(committedText) : '';
+  return spaced + (pendingBuffer ? morseToDisplay(pendingBuffer) : '');
+}
+
+function parseCommittedDisplay(display: string): string {
+  // Manual spaces (head nod) are preserved; auto spaces from display collapse per chunk.
+  return display
+    .split(' ')
+    .map((chunk) => lettersOnly(chunk))
+    .filter((chunk) => chunk.length > 0)
+    .join(' ');
 }
 
 function syncOutput(): void {
@@ -86,11 +97,11 @@ function onUserEdit(): void {
   const val = output.value;
 
   if (pendingDisplay && val.endsWith(pendingDisplay)) {
-    committedText = val.slice(0, -pendingDisplay.length);
+    committedText = parseCommittedDisplay(val.slice(0, -pendingDisplay.length));
     return;
   }
 
-  committedText = val;
+  committedText = parseCommittedDisplay(val);
   pendingBuffer = '';
   morseMachine.reset();
 }

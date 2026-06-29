@@ -5,48 +5,70 @@ const wordList = (wordListRaw as string[]).filter(
 );
 
 const WORDS = new Set<string>(wordList);
-const WORD_SCORE = new Map<string, number>(
-  wordList.map((word, index) => [word, wordList.length - index]),
-);
+const MAX_WORD_LEN = wordList.reduce((max, word) => Math.max(max, word.length), 1);
 
-type SegState = { words: string[]; score: number };
-
-/**
- * Split concatenated letters into spaced words (e.g. helloitsme → hello its me).
- * Uses dictionary DP; maximizes total word frequency score.
- */
-export function segmentWords(input: string): string {
-  const s = input.toLowerCase().replace(/[^a-z]/g, '');
-  if (!s) return '';
-
-  const n = s.length;
-  const dp: (SegState | null)[] = Array(n + 1).fill(null);
-  dp[0] = { words: [], score: 0 };
-
-  for (let i = 1; i <= n; i++) {
-    for (let j = 0; j < i; j++) {
-      const prev = dp[j];
-      if (!prev) continue;
-
-      const word = s.slice(j, i);
-      if (!WORDS.has(word)) continue;
-
-      const score = prev.score + (WORD_SCORE.get(word) ?? 1);
-      const cand: SegState = { words: [...prev.words, word], score };
-      const cur = dp[i];
-
-      if (!cur || cand.score > cur.score) {
-        dp[i] = cand;
-      }
-    }
+function longestWordAt(s: string, start: number): string | null {
+  const maxLen = Math.min(MAX_WORD_LEN, s.length - start);
+  for (let len = maxLen; len >= 1; len--) {
+    const word = s.slice(start, start + len);
+    if (WORDS.has(word)) return word;
   }
-
-  const best = dp[n];
-  if (best) return best.words.join(' ');
-  return s;
+  return null;
 }
 
-/** Strip display spaces and non-letters for raw letter storage. */
+/**
+ * Left-to-right spacing: known words get spaces; unknown letter runs stay merged
+ * until a later known word is found (e.g. helloxyzworld → hello xyz world).
+ */
+export function segmentIncremental(run: string): string {
+  const s = run.toLowerCase().replace(/[^a-z]/g, '');
+  if (!s) return '';
+
+  const parts: string[] = [];
+  let i = 0;
+
+  while (i < s.length) {
+    const matched = longestWordAt(s, i);
+    if (matched) {
+      parts.push(matched);
+      i += matched.length;
+      continue;
+    }
+
+    let nextStart = -1;
+    let nextWord = '';
+    for (let j = i + 1; j < s.length; j++) {
+      const word = longestWordAt(s, j);
+      if (word) {
+        nextStart = j;
+        nextWord = word;
+        break;
+      }
+    }
+
+    if (nextStart < 0) {
+      parts.push(s.slice(i));
+      break;
+    }
+
+    parts.push(s.slice(i, nextStart));
+    parts.push(nextWord);
+    i = nextStart + nextWord.length;
+  }
+
+  return parts.join(' ');
+}
+
+/** Apply incremental segmentation per manual-space chunk. */
+export function formatCommittedText(committed: string): string {
+  if (!committed) return '';
+  return committed
+    .split(' ')
+    .map((chunk) => segmentIncremental(chunk))
+    .join(' ');
+}
+
+/** Strip non-letters; used when the user edits the textarea. */
 export function lettersOnly(input: string): string {
   return input.toLowerCase().replace(/[^a-z]/g, '');
 }
