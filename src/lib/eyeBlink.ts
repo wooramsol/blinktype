@@ -22,13 +22,11 @@ export function averageEar(landmarks: Point2D[]): number {
   return (eyeAspectRatio(landmarks, LEFT_EYE) + eyeAspectRatio(landmarks, RIGHT_EYE)) / 2;
 }
 
-/** Selfie: left eye on screen-left, right eye on screen-right. */
-export function selfieEyeEars(landmarks: Point2D[]): { left: number; right: number } {
-  return {
-    left: eyeAspectRatio(landmarks, LEFT_EYE),
-    right: eyeAspectRatio(landmarks, RIGHT_EYE),
-  };
-}
+type ScreenEye = {
+  ear: number;
+  outerX: number;
+  centerY: number;
+};
 
 function leftEyeCenterY(landmarks: Point2D[]): number {
   return (landmarks[160].y + landmarks[158].y + landmarks[153].y + landmarks[144].y) / 4;
@@ -38,17 +36,55 @@ function rightEyeCenterY(landmarks: Point2D[]): number {
   return (landmarks[385].y + landmarks[387].y + landmarks[373].y + landmarks[380].y) / 4;
 }
 
-/** Mirrored selfie screen position for a landmark, pushed outward from the nose. */
+function eyeCenterX(landmarks: Point2D[], inner: number, outer: number): number {
+  return (landmarks[inner].x + landmarks[outer].x) / 2;
+}
+
+function mirrorScreenX(landmarkX: number): number {
+  return 1 - landmarkX;
+}
+
+/** Resolve which eye is on the selfie screen-left vs screen-right. */
+export function selfieScreenEyes(landmarks: Point2D[]): {
+  screenLeft: ScreenEye;
+  screenRight: ScreenEye;
+} {
+  const mpLeft: ScreenEye = {
+    ear: eyeAspectRatio(landmarks, LEFT_EYE),
+    outerX: landmarks[33].x,
+    centerY: leftEyeCenterY(landmarks),
+  };
+  const mpRight: ScreenEye = {
+    ear: eyeAspectRatio(landmarks, RIGHT_EYE),
+    outerX: landmarks[263].x,
+    centerY: rightEyeCenterY(landmarks),
+  };
+
+  const leftOnScreen = mirrorScreenX(eyeCenterX(landmarks, 133, 33));
+  const rightOnScreen = mirrorScreenX(eyeCenterX(landmarks, 362, 263));
+
+  if (leftOnScreen < rightOnScreen) {
+    return { screenLeft: mpLeft, screenRight: mpRight };
+  }
+  return { screenLeft: mpRight, screenRight: mpLeft };
+}
+
+/** Selfie screen positions for L/R labels, pushed outside each eye. */
 export function selfieEarLabelPoints(
   landmarks: Point2D[],
   width: number,
   height: number,
-): { left: Point2D; right: Point2D } {
-  const toScreen = (p: Point2D): Point2D => ({ x: (1 - p.x) * width, y: p.y * height });
-  const nose = toScreen(landmarks[1]);
-  const pad = Math.max(14, width * 0.025);
+): { screenLeft: Point2D; screenRight: Point2D } {
+  const eyes = selfieScreenEyes(landmarks);
+  const toScreen = (x: number, y: number): Point2D => ({
+    x: mirrorScreenX(x) * width,
+    y: y * height,
+  });
+  const nose = toScreen(landmarks[1].x, landmarks[1].y);
+  const pad = Math.max(20, width * 0.045);
 
-  const pushOut = (outer: Point2D): Point2D => {
+  const pushOut = (eye: ScreenEye): Point2D => {
+    const outer = toScreen(eye.outerX, eye.centerY);
     const dx = outer.x - nose.x;
     const dy = outer.y - nose.y;
     const len = Math.hypot(dx, dy) || 1;
@@ -59,8 +95,8 @@ export function selfieEarLabelPoints(
   };
 
   return {
-    left: pushOut(toScreen({ x: landmarks[33].x, y: leftEyeCenterY(landmarks) })),
-    right: pushOut(toScreen({ x: landmarks[263].x, y: rightEyeCenterY(landmarks) })),
+    screenLeft: pushOut(eyes.screenLeft),
+    screenRight: pushOut(eyes.screenRight),
   };
 }
 

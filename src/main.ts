@@ -1,6 +1,6 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector, selfieEarLabelPoints, selfieEyeEars } from './lib/eyeBlink';
+import { BlinkDetector, selfieEarLabelPoints, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import { MouthOpenDetector, mouthOpenRatio } from './lib/mouthOpen';
@@ -121,18 +121,21 @@ function positionEarLabels(landmarks: { x: number; y: number }[]): void {
   const h = videoWrap.clientHeight;
   if (w === 0 || h === 0) return;
 
-  const { left, right } = selfieEarLabelPoints(landmarks, w, h);
-  const gap = 6;
+  const eyes = selfieScreenEyes(landmarks);
+  const { screenLeft, screenRight } = selfieEarLabelPoints(landmarks, w, h);
+  const gap = 8;
 
+  earLabelLeft.textContent = `L ${eyes.screenLeft.ear.toFixed(3)}`;
   earLabelLeft.style.left = 'auto';
-  earLabelLeft.style.right = `${w - left.x + gap}px`;
-  earLabelLeft.style.top = `${left.y}px`;
+  earLabelLeft.style.right = `${Math.max(0, w - screenLeft.x + gap)}px`;
+  earLabelLeft.style.top = `${screenLeft.y}px`;
   earLabelLeft.style.transform = 'translateY(-50%)';
   earLabelLeft.hidden = false;
 
-  earLabelRight.style.left = `${right.x + gap}px`;
+  earLabelRight.textContent = `R ${eyes.screenRight.ear.toFixed(3)}`;
+  earLabelRight.style.left = `${Math.min(w, screenRight.x + gap)}px`;
   earLabelRight.style.right = 'auto';
-  earLabelRight.style.top = `${right.y}px`;
+  earLabelRight.style.top = `${screenRight.y}px`;
   earLabelRight.style.transform = 'translateY(-50%)';
   earLabelRight.hidden = false;
 }
@@ -197,12 +200,10 @@ async function loop(): Promise<void> {
       resizeOverlayCanvas(overlay, video);
       drawFaceOverlay(overlayCtx, frame.landmarks);
 
-      const selfieEars = selfieEyeEars(frame.landmarks);
-      earLabelLeft.textContent = `L ${selfieEars.left.toFixed(3)}`;
-      earLabelRight.textContent = `R ${selfieEars.right.toFixed(3)}`;
+      const eyes = selfieScreenEyes(frame.landmarks);
       positionEarLabels(frame.landmarks);
 
-      const blink = blinkDetector.update(selfieEars.left, selfieEars.right, now);
+      const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
       if (blink) {
         morseMachine.onBlink(blink, now);
       } else if (mouthOpenDetector.update(mouthOpenRatio(frame.landmarks), now)) {
