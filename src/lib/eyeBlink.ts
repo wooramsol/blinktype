@@ -148,14 +148,13 @@ export function selfieEarHudPixels(
 
 export interface BlinkDetectorConfig {
   closedThreshold: number;
-  openThreshold: number;
-  minBlinkMs: number;
+  /** EAR must rise above this to arm the next wink (keep close to closed for fast re-arm). */
+  rearmThreshold: number;
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   closedThreshold: 0.23,
-  openThreshold: 0.26,
-  minBlinkMs: 30,
+  rearmThreshold: 0.245,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
@@ -168,14 +167,13 @@ export interface BlinkEvent {
 }
 
 type EyeState = {
-  closed: boolean;
-  closeStartedAt: number;
-  fired: boolean;
+  armed: boolean;
+  disarmedAt: number;
 };
 
 export class BlinkDetector {
-  private left: EyeState = { closed: false, closeStartedAt: 0, fired: false };
-  private right: EyeState = { closed: false, closeStartedAt: 0, fired: false };
+  private left: EyeState = { armed: true, disarmedAt: 0 };
+  private right: EyeState = { armed: true, disarmedAt: 0 };
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
@@ -188,6 +186,10 @@ export class BlinkDetector {
     return leftEvent ?? rightEvent;
   }
 
+  private otherEyeOpen(otherEar: number): boolean {
+    return otherEar > this.config.closedThreshold - 0.03;
+  }
+
   private updateEye(
     eye: SelfieEye,
     ear: number,
@@ -195,36 +197,22 @@ export class BlinkDetector {
     state: EyeState,
     now: number,
   ): BlinkEvent | null {
-    if (
-      !state.closed &&
-      ear < this.config.closedThreshold &&
-      otherEar > this.config.closedThreshold - 0.03
-    ) {
-      state.closed = true;
-      state.closeStartedAt = now;
-      state.fired = false;
-      return null;
+    if (!state.armed && now - state.disarmedAt > 180) {
+      state.armed = true;
     }
 
-    if (state.closed) {
-      if (ear > this.config.openThreshold) {
-        state.closed = false;
-        state.fired = false;
-        return null;
-      }
+    if (state.armed && ear < this.config.closedThreshold && this.otherEyeOpen(otherEar)) {
+      state.armed = false;
+      state.disarmedAt = now;
+      return {
+        symbol: eye === 'left' ? 'dot' : 'dash',
+        eye,
+        durationMs: 0,
+      };
+    }
 
-      if (
-        !state.fired &&
-        now - state.closeStartedAt >= this.config.minBlinkMs &&
-        otherEar > this.config.closedThreshold - 0.03
-      ) {
-        state.fired = true;
-        return {
-          symbol: eye === 'left' ? 'dot' : 'dash',
-          eye,
-          durationMs: now - state.closeStartedAt,
-        };
-      }
+    if (!state.armed && ear > this.config.rearmThreshold) {
+      state.armed = true;
     }
 
     return null;
