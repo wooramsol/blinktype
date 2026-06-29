@@ -32,22 +32,21 @@ export function eyeAspectRatio(landmarks: Point2D[], indices: readonly number[])
   return vertical / (2 * horizontal);
 }
 
-/** Lid aperture + brow-to-upper-lid gap, normalized by eye width. */
-export function eyeBrowOpenRatio(
+/** How open the lid is relative to the brow — drops when winking/squinting. */
+export function eyeBrowSquintRatio(
   landmarks: Point2D[],
   eye: readonly number[],
   brow: readonly number[],
 ): number {
-  const [p1, p2, p3, p4, p5, p6] = eye.map((i) => landmarks[i]);
+  const [, p2, p3, , p5, p6] = eye.map((i) => landmarks[i]);
   const lidVertical = dist(p2, p6) + dist(p3, p5);
-  const horizontal = dist(p1, p4);
-  if (horizontal === 0) return 1;
 
   const browCenter = centroid(brow.map((i) => landmarks[i]));
   const upperLid = { x: (p2.x + p3.x) / 2, y: (p2.y + p3.y) / 2 };
   const browGap = dist(browCenter, upperLid);
 
-  return (lidVertical + browGap) / (2 * horizontal);
+  if (lidVertical + browGap === 0) return 1;
+  return lidVertical / (lidVertical + browGap);
 }
 
 /** Eye + brow combined openness (used for wink detection and HUD). */
@@ -57,8 +56,8 @@ export function eyeOpenness(
   brow: readonly number[],
 ): number {
   const ear = eyeAspectRatio(landmarks, eye);
-  const ebr = eyeBrowOpenRatio(landmarks, eye, brow);
-  return ear * 0.5 + ebr * 0.5;
+  const squint = eyeBrowSquintRatio(landmarks, eye, brow);
+  return ear * 0.55 + squint * 0.45;
 }
 
 export function averageEar(landmarks: Point2D[]): number {
@@ -188,8 +187,8 @@ export interface BlinkDetectorConfig {
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
-  closedThreshold: 0.24,
-  openThreshold: 0.28,
+  closedThreshold: 0.2,
+  openThreshold: 0.23,
   minBlinkMs: 80,
 };
 
