@@ -10,10 +10,15 @@ const EYE_CONTOURS: Connection[] = [
   ...FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS,
 ];
 
-const FACE_CONTOURS: Connection[] = [
-  ...FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
-  ...FaceLandmarker.FACE_LANDMARKS_CONTOURS,
-];
+const INNER_LIP_INDICES = new Set([
+  78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308,
+  191, 80, 81, 82, 13, 312, 311, 310, 415,
+]);
+
+const INNER_LIP_CONTOURS: Connection[] = FaceLandmarker.FACE_LANDMARKS_LIPS.filter(
+  (connection) =>
+    INNER_LIP_INDICES.has(connection.start) && INNER_LIP_INDICES.has(connection.end),
+);
 
 function connectionIndices(connections: Connection[]): number[] {
   const indices = new Set<number>();
@@ -24,7 +29,8 @@ function connectionIndices(connections: Connection[]): number[] {
   return [...indices];
 }
 
-const EYE_POINT_INDICES = connectionIndices(EYE_CONTOURS);
+const OVERLAY_CONTOURS = [...EYE_CONTOURS, ...INNER_LIP_CONTOURS];
+const OVERLAY_POINT_INDICES = connectionIndices(OVERLAY_CONTOURS);
 
 export function resizeOverlayCanvas(
   canvas: HTMLCanvasElement,
@@ -46,10 +52,9 @@ export function drawFaceOverlay(
   const h = ctx.canvas.height;
   ctx.clearRect(0, 0, w, h);
 
-  drawConnections(ctx, landmarks, FACE_CONTOURS, w, h, 'rgba(255,255,255,0.45)', 1);
-  drawConnections(ctx, landmarks, EYE_CONTOURS, w, h, '#fff', 1);
+  drawConnections(ctx, landmarks, OVERLAY_CONTOURS, w, h, '#fff', 1);
 
-  for (const i of EYE_POINT_INDICES) {
+  for (const i of OVERLAY_POINT_INDICES) {
     drawPoint(ctx, landmarks[i], w, h, '#fff', 2);
   }
 }
