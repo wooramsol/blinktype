@@ -22,6 +22,14 @@ export function averageEar(landmarks: Point2D[]): number {
   return (eyeAspectRatio(landmarks, LEFT_EYE) + eyeAspectRatio(landmarks, RIGHT_EYE)) / 2;
 }
 
+/** Selfie mirror view: left on screen = subject right eye, right on screen = subject left eye. */
+export function selfieEyeEars(landmarks: Point2D[]): { left: number; right: number } {
+  return {
+    left: eyeAspectRatio(landmarks, RIGHT_EYE),
+    right: eyeAspectRatio(landmarks, LEFT_EYE),
+  };
+}
+
 /** Normalized anchor beside the face for HUD placement (mirrored display uses 1 - x). */
 export function faceSideHudAnchor(landmarks: Point2D[]): Point2D {
   const nose = landmarks[1];
@@ -40,43 +48,69 @@ export function faceSideHudAnchor(landmarks: Point2D[]): Point2D {
 export interface BlinkDetectorConfig {
   closedThreshold: number;
   openThreshold: number;
-  dotMaxMs: number;
   minBlinkMs: number;
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   closedThreshold: 0.21,
   openThreshold: 0.24,
-  dotMaxMs: 280,
   minBlinkMs: 80,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
+export type SelfieEye = 'left' | 'right';
 
 export interface BlinkEvent {
   symbol: BlinkSymbol;
+  eye: SelfieEye;
   durationMs: number;
 }
 
+type EyeState = {
+  closed: boolean;
+  closeStartedAt: number;
+};
+
 export class BlinkDetector {
-  private eyesClosed = false;
-  private closeStartedAt = 0;
+  private left: EyeState = { closed: false, closeStartedAt: 0 };
+  private right: EyeState = { closed: false, closeStartedAt: 0 };
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
-  update(ear: number, now = performance.now()): BlinkEvent | null {
-    if (!this.eyesClosed && ear < this.config.closedThreshold) {
-      this.eyesClosed = true;
-      this.closeStartedAt = now;
+  /** Selfie left eye = dot, selfie right eye = dash. Requires the other eye to stay open (wink). */
+  update(leftEar: number, rightEar: number, now = performance.now()): BlinkEvent | null {
+    const leftEvent = this.updateEye('left', leftEar, rightEar, this.left, now);
+    const rightEvent = this.updateEye('right', rightEar, leftEar, this.right, now);
+
+    if (leftEvent && rightEvent) return null;
+    return leftEvent ?? rightEvent;
+  }
+
+  private updateEye(
+    eye: SelfieEye,
+    ear: number,
+    otherEar: number,
+    state: EyeState,
+    now: number,
+  ): BlinkEvent | null {
+    if (
+      !state.closed &&
+      ear < this.config.closedThreshold &&
+      otherEar > this.config.openThreshold
+    ) {
+      state.closed = true;
+      state.closeStartedAt = now;
       return null;
     }
 
-    if (this.eyesClosed && ear > this.config.openThreshold) {
-      this.eyesClosed = false;
-      const durationMs = now - this.closeStartedAt;
+    if (state.closed && ear > this.config.openThreshold) {
+      state.closed = false;
+      const durationMs = now - state.closeStartedAt;
       if (durationMs < this.config.minBlinkMs) return null;
+      if (otherEar <= this.config.openThreshold) return null;
       return {
-        symbol: durationMs <= this.config.dotMaxMs ? 'dot' : 'dash',
+        symbol: eye === 'left' ? 'dot' : 'dash',
+        eye,
         durationMs,
       };
     }

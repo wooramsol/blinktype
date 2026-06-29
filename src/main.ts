@@ -1,6 +1,6 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector, faceSideHudAnchor } from './lib/eyeBlink';
+import { BlinkDetector, faceSideHudAnchor, selfieEyeEars } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import {
@@ -177,10 +177,11 @@ async function loop(): Promise<void> {
       resizeOverlayCanvas(overlay, video);
       drawFaceOverlay(overlayCtx, frame.landmarks);
 
-      earLabel.textContent = `EAR ${frame.ear.toFixed(3)}`;
+      const selfieEars = selfieEyeEars(frame.landmarks);
+      earLabel.textContent = `L ${selfieEars.left.toFixed(3)}  R ${selfieEars.right.toFixed(3)}`;
       positionEarLabel(frame.landmarks);
 
-      const blink = blinkDetector.update(frame.ear, now);
+      const blink = blinkDetector.update(selfieEars.left, selfieEars.right, now);
       if (blink) {
         morseMachine.onBlink(blink, now);
       } else if (headShakeDetector.update(noseOffsetX(frame.landmarks), now)) {
