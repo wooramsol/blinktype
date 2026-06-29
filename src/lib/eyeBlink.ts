@@ -69,11 +69,13 @@ export function selfieScreenEyes(landmarks: Point2D[]): {
 }
 
 /** Normalized anchor (0–1), same space as the face overlay inside the mirror. */
-export function selfieEarLabelAnchors(landmarks: Point2D[]): {
+export function selfieEarLabelAnchors(
+  landmarks: Point2D[],
+  eyes = selfieScreenEyes(landmarks),
+): {
   screenLeft: Point2D;
   screenRight: Point2D;
 } {
-  const eyes = selfieScreenEyes(landmarks);
   const nose = landmarks[1];
   const pad = 0.055;
 
@@ -101,8 +103,8 @@ export interface BlinkDetectorConfig {
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   closedThreshold: 0.21,
-  openThreshold: 0.24,
-  minBlinkMs: 80,
+  openThreshold: 0.22,
+  minBlinkMs: 60,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
