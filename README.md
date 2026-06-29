@@ -1,17 +1,30 @@
 # Blinktype
 
-A web app that detects **eye blinks** via webcam, interprets them as **Morse code**, and types characters into a text field.
+A web app that detects **eye blinks** via webcam, interprets them as **Morse code**, and types characters.
 
 Live: https://wooramsol.github.io/blinktype/
 
 ## Usage
 
-1. **Start camera** — Allow front-facing webcam access.
-2. (Recommended) **Calibrate (close eyes)** — Press the button with eyes closed, then open your eyes and press **Finish calibration**.
-3. Focus the input field and blink:
-   - **Short blink** → `·` (dot)
-   - **Long blink** → `−` (dash)
-4. After a letter gap, characters are entered automatically. A longer gap inserts a space.
+1. Open the page and allow webcam access — the camera starts automatically.
+2. **Short blink** → `·` (dot), **long blink** → `−` (dash).
+3. After a letter gap, Morse is decoded into a character. A longer gap inserts a space.
+4. The output field supports normal keyboard typing and editing.
+
+## Global typing (other apps)
+
+Browsers cannot send keystrokes to other apps by themselves. Run the local type bridge:
+
+```bash
+npm install
+npm run type-bridge
+```
+
+Keep it running, then focus any app (editor, chat, browser tab). Decoded characters are typed there like a real keyboard.
+
+- **Linux:** requires `xdotool`
+- **macOS:** uses AppleScript (Accessibility permission may be required)
+- **Windows:** uses PowerShell `SendKeys`
 
 ## Local development
 
@@ -23,10 +36,6 @@ npm run dev
 ## Deployment
 
 Pushes to `main` automatically deploy to https://wooramsol.github.io/blinktype/ via GitHub Actions.
-
-## Limitations
-
-Browser security prevents sending keystrokes to other apps. Text is entered only in this page's text area.
 
 ## License
 
