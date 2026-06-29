@@ -9,25 +9,9 @@ const OVERLAY_OPACITY = 0.5;
 
 type Connection = { start: number; end: number };
 
-/** Upper eyelid arc per eye (MediaPipe face mesh). */
-const UPPER_EYELID_CONTOURS: Connection[] = [
-  { start: 33, end: 246 },
-  { start: 246, end: 161 },
-  { start: 161, end: 160 },
-  { start: 160, end: 159 },
-  { start: 159, end: 158 },
-  { start: 158, end: 157 },
-  { start: 157, end: 173 },
-  { start: 173, end: 133 },
-  { start: 263, end: 249 },
-  { start: 249, end: 390 },
-  { start: 390, end: 373 },
-  { start: 373, end: 374 },
-  { start: 374, end: 380 },
-  { start: 380, end: 381 },
-  { start: 381, end: 382 },
-  { start: 382, end: 362 },
-];
+/** MediaPipe names are camera-left/right; each eye contour is lower arc then upper arc. */
+const MP_EYE_A = FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE;
+const MP_EYE_B = FaceLandmarker.FACE_LANDMARKS_LEFT_EYE;
 
 /** Lower brow arc (eye-facing edge) per side — not the full eyebrow. */
 const LOWER_EYEBROW_CONTOURS: Connection[] = [
@@ -51,8 +35,6 @@ const INNER_LIP_CONTOURS: Connection[] = FaceLandmarker.FACE_LANDMARKS_LIPS.filt
     INNER_LIP_INDICES.has(connection.start) && INNER_LIP_INDICES.has(connection.end),
 );
 
-const LEFT_UPPER_EYELID_INDICES = uniqueIndices(UPPER_EYELID_CONTOURS.slice(0, 8));
-const RIGHT_UPPER_EYELID_INDICES = uniqueIndices(UPPER_EYELID_CONTOURS.slice(8));
 const LOWER_BROW_INDICES = uniqueIndices(LOWER_EYEBROW_CONTOURS);
 
 function uniqueIndices(connections: Connection[]): number[] {
@@ -64,10 +46,40 @@ function uniqueIndices(connections: Connection[]): number[] {
   return [...set];
 }
 
+function splitEyeArcs(connections: Connection[]): [Connection[], Connection[]] {
+  const mid = connections.length / 2;
+  return [connections.slice(0, mid), connections.slice(mid)];
+}
+
+function arcAvgY(landmarks: Point2D[], arc: Connection[]): number {
+  const ids = uniqueIndices(arc);
+  let sum = 0;
+  for (const i of ids) sum += landmarks[i].y;
+  return sum / (ids.length || 1);
+}
+
+/** Upper eyelid = arc with smaller average y (higher on the face). */
+function upperEyelidArc(connections: Connection[], landmarks: Point2D[]): Connection[] {
+  const [a, b] = splitEyeArcs(connections);
+  return arcAvgY(landmarks, a) < arcAvgY(landmarks, b) ? a : b;
+}
+
+function upperEyelidContours(landmarks: Point2D[]): Connection[] {
+  return [
+    ...upperEyelidArc(MP_EYE_A, landmarks),
+    ...upperEyelidArc(MP_EYE_B, landmarks),
+  ];
+}
+
 function expandedLandmarks(landmarks: Point2D[]): Map<number, Point2D> {
-  const leftEye = expandLandmarkRegion(landmarks, LEFT_UPPER_EYELID_INDICES, EYE_OVERLAY_EXPAND);
-  const rightEye = expandLandmarkRegion(landmarks, RIGHT_UPPER_EYELID_INDICES, EYE_OVERLAY_EXPAND);
-  return new Map([...leftEye, ...rightEye]);
+  const arcs = [upperEyelidArc(MP_EYE_A, landmarks), upperEyelidArc(MP_EYE_B, landmarks)];
+  const out = new Map<number, Point2D>();
+  for (const arc of arcs) {
+    const indices = uniqueIndices(arc);
+    const expanded = expandLandmarkRegion(landmarks, indices, EYE_OVERLAY_EXPAND);
+    for (const [i, p] of expanded) out.set(i, p);
+  }
+  return out;
 }
 
 export function resizeOverlayCanvas(
@@ -90,16 +102,18 @@ export function drawFaceOverlay(
   const h = ctx.canvas.height;
   ctx.clearRect(0, 0, w, h);
 
+  const eyelids = upperEyelidContours(landmarks);
+  const eyelidIndices = uniqueIndices(eyelids);
   const expanded = expandedLandmarks(landmarks);
 
   ctx.save();
   ctx.globalAlpha = OVERLAY_OPACITY;
 
-  drawConnections(ctx, landmarks, UPPER_EYELID_CONTOURS, w, h, '#fff', 1, expanded);
+  drawConnections(ctx, landmarks, eyelids, w, h, '#fff', 1, expanded);
   drawConnections(ctx, landmarks, LOWER_EYEBROW_CONTOURS, w, h, '#fff', 1);
   drawConnections(ctx, landmarks, INNER_LIP_CONTOURS, w, h, '#fff', 1);
 
-  for (const i of [...LEFT_UPPER_EYELID_INDICES, ...RIGHT_UPPER_EYELID_INDICES]) {
+  for (const i of eyelidIndices) {
     const p = expanded.get(i) ?? landmarks[i];
     drawPoint(ctx, p, w, h, '#fff', 2);
   }

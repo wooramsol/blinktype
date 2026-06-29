@@ -102,6 +102,38 @@ body {
   transform: translate(8px, -50%);
 }
 
+/* Mouth / EAR HUD below preview center. */
+.mouth-hud {
+  transform: translate(-50%, -50%);
+}
+
+.blink-threshold {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid #444;
+  font: inherit;
+  font-size: 11px;
+  color: #fff;
+  pointer-events: auto;
+}
+
+.blink-threshold input[type='range'] {
+  width: 88px;
+  margin: 0;
+  accent-color: #fff;
+}
+
+.blink-threshold label {
+  white-space: nowrap;
+}
+
 #output {
   width: 100%;
   min-height: 120px;
