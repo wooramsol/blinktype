@@ -1,7 +1,9 @@
 /** Classic morse tone timing — dash is 3× dot length (1:3 ratio). */
+import { MORSE_DASH_MS, MORSE_DOT_MS } from './morseTiming';
+
 const MORSE_FREQ_HZ = 700;
-const DOT_MS = 60;
-const DASH_MS = DOT_MS * 3;
+const DOT_MS = MORSE_DOT_MS;
+const DASH_MS = MORSE_DASH_MS;
 const PEAK_GAIN = 0.22;
 
 export class MorseAudio {
