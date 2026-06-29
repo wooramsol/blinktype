@@ -1,12 +1,13 @@
 import { decodeMorse } from './morse';
 import type { BlinkEvent } from './eyeBlink';
+import { MORSE_LETTER_GAP_MS } from './morseTiming';
 
 export interface MorseTimingConfig {
   letterGapMs: number;
 }
 
 export const DEFAULT_MORSE_TIMING: MorseTimingConfig = {
-  letterGapMs: 700,
+  letterGapMs: MORSE_LETTER_GAP_MS,
 };
 
 export interface MorseCommitEvent {

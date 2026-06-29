@@ -1,6 +1,6 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector, DEFAULT_BLINK_CONFIG, averageEar, selfieScreenEyes } from './lib/eyeBlink';
+import { BlinkDetector, averageEar, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import {
@@ -10,6 +10,11 @@ import {
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
 import { MorseAudio } from './lib/morseAudio';
+import {
+  DOT_MAX_MS_SLIDER_MAX,
+  DOT_MAX_MS_SLIDER_MIN,
+  MORSE_DOT_DASH_THRESHOLD_MS,
+} from './lib/morseTiming';
 import { formatCommittedText, lettersOnly } from './lib/wordSegment';
 import pkg from '../package.json';
 import { versionLabel } from './buildRef';
@@ -25,8 +30,8 @@ app.innerHTML = `
     <div id="video-wrap" class="video-wrap">
       <div class="blink-threshold" id="blink-threshold">
         <label for="dot-max-ms">·/− ms</label>
-        <input type="range" id="dot-max-ms" min="80" max="450" step="10" value="220" />
-        <span id="dot-max-ms-val">220</span>
+        <input type="range" id="dot-max-ms" min="${DOT_MAX_MS_SLIDER_MIN}" max="${DOT_MAX_MS_SLIDER_MAX}" step="10" value="${MORSE_DOT_DASH_THRESHOLD_MS}" />
+        <span id="dot-max-ms-val">${MORSE_DOT_DASH_THRESHOLD_MS}</span>
       </div>
       <div class="video-mirror">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
@@ -56,9 +61,11 @@ let starting = false;
 const DOT_MAX_MS_KEY = 'blinktype-dotMaxMs';
 const savedDotMaxMs = Number(localStorage.getItem(DOT_MAX_MS_KEY));
 const initialDotMaxMs =
-  Number.isFinite(savedDotMaxMs) && savedDotMaxMs >= 80 && savedDotMaxMs <= 450
+  Number.isFinite(savedDotMaxMs) &&
+  savedDotMaxMs >= DOT_MAX_MS_SLIDER_MIN &&
+  savedDotMaxMs <= DOT_MAX_MS_SLIDER_MAX
     ? savedDotMaxMs
-    : DEFAULT_BLINK_CONFIG.dotMaxMs;
+    : MORSE_DOT_DASH_THRESHOLD_MS;
 
 dotMaxMsInput.value = String(initialDotMaxMs);
 dotMaxMsVal.textContent = String(initialDotMaxMs);
