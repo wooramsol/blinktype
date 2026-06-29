@@ -11,13 +11,14 @@ import {
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
 import pkg from '../package.json';
+import { versionLabel } from './buildRef';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 app.innerHTML = `
   <div class="layout">
     <div class="title-row">
-      <h1 class="title"># BlinkType v${pkg.version}</h1>
+      <h1 class="title"># BlinkType ${versionLabel(pkg.version)}</h1>
       <span class="credit">@wooramsol</span>
     </div>
     <div id="video-wrap" class="video-wrap">
@@ -116,11 +117,9 @@ function backspaceOutput(): void {
   syncOutput();
 }
 
-function positionEarLabels(
-  landmarks: { x: number; y: number }[],
-  eyes: ReturnType<typeof selfieScreenEyes>,
-): void {
-  const { screenLeft, screenRight } = selfieEarLabelAnchors(landmarks, eyes);
+function positionEarLabels(landmarks: { x: number; y: number }[]): void {
+  const eyes = selfieScreenEyes(landmarks);
+  const { screenLeft, screenRight } = selfieEarLabelAnchors(landmarks);
 
   earLabelLeft.textContent = `L ${eyes.screenLeft.ear.toFixed(3)}`;
   earLabelLeft.style.left = `${screenLeft.x * 100}%`;
@@ -196,9 +195,9 @@ async function loop(): Promise<void> {
       drawFaceOverlay(overlayCtx, frame.landmarks);
 
       const eyes = selfieScreenEyes(frame.landmarks);
-      positionEarLabels(frame.landmarks, eyes);
+      positionEarLabels(frame.landmarks);
 
-      const blink = blinkDetector.update(frame.ear, now);
+      const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
       if (blink) {
         morseMachine.onBlink(blink, now);
       } else if (mouthOpenDetector.update(mouthOpenRatio(frame.landmarks), now)) {

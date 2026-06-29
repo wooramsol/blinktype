@@ -6,7 +6,7 @@ export interface MorseTimingConfig {
 }
 
 export const DEFAULT_MORSE_TIMING: MorseTimingConfig = {
-  letterGapMs: 900,
+  letterGapMs: 500,
 };
 
 export interface MorseCommitEvent {
