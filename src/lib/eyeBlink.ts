@@ -38,14 +38,30 @@ function rightEyeCenterY(landmarks: Point2D[]): number {
   return (landmarks[385].y + landmarks[387].y + landmarks[373].y + landmarks[380].y) / 4;
 }
 
-/** Selfie left eye outer corner — label sits further left via CSS. */
-export function leftEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
-  return { x: landmarks[33].x, y: leftEyeCenterY(landmarks) };
-}
+/** Mirrored selfie screen position for a landmark, pushed outward from the nose. */
+export function selfieEarLabelPoints(
+  landmarks: Point2D[],
+  width: number,
+  height: number,
+): { left: Point2D; right: Point2D } {
+  const toScreen = (p: Point2D): Point2D => ({ x: (1 - p.x) * width, y: p.y * height });
+  const nose = toScreen(landmarks[1]);
+  const pad = Math.max(14, width * 0.025);
 
-/** Selfie right eye outer corner — label sits further right via CSS. */
-export function rightEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
-  return { x: landmarks[263].x, y: rightEyeCenterY(landmarks) };
+  const pushOut = (outer: Point2D): Point2D => {
+    const dx = outer.x - nose.x;
+    const dy = outer.y - nose.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return {
+      x: outer.x + (dx / len) * pad,
+      y: outer.y + (dy / len) * pad,
+    };
+  };
+
+  return {
+    left: pushOut(toScreen({ x: landmarks[33].x, y: leftEyeCenterY(landmarks) })),
+    right: pushOut(toScreen({ x: landmarks[263].x, y: rightEyeCenterY(landmarks) })),
+  };
 }
 
 export interface BlinkDetectorConfig {

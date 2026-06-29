@@ -1,6 +1,6 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector, leftEyeEarHudAnchor, rightEyeEarHudAnchor, selfieEyeEars } from './lib/eyeBlink';
+import { BlinkDetector, selfieEarLabelPoints, selfieEyeEars } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import { MouthOpenDetector, mouthOpenRatio } from './lib/mouthOpen';
@@ -116,24 +116,25 @@ function backspaceOutput(): void {
   syncOutput();
 }
 
-function positionEarLabel(
-  anchor: { x: number; y: number },
-  el: HTMLElement,
-  side: 'left' | 'right',
-): void {
-  const screenX = 1 - anchor.x;
-  el.style.left = `${screenX * 100}%`;
-  el.style.top = `${anchor.y * 100}%`;
-  el.style.transform =
-    side === 'left'
-      ? 'translate(calc(-100% - 6px), -50%)'
-      : 'translate(6px, -50%)';
-  el.hidden = false;
-}
-
 function positionEarLabels(landmarks: { x: number; y: number }[]): void {
-  positionEarLabel(leftEyeEarHudAnchor(landmarks), earLabelLeft, 'left');
-  positionEarLabel(rightEyeEarHudAnchor(landmarks), earLabelRight, 'right');
+  const w = videoWrap.clientWidth;
+  const h = videoWrap.clientHeight;
+  if (w === 0 || h === 0) return;
+
+  const { left, right } = selfieEarLabelPoints(landmarks, w, h);
+  const gap = 6;
+
+  earLabelLeft.style.left = 'auto';
+  earLabelLeft.style.right = `${w - left.x + gap}px`;
+  earLabelLeft.style.top = `${left.y}px`;
+  earLabelLeft.style.transform = 'translateY(-50%)';
+  earLabelLeft.hidden = false;
+
+  earLabelRight.style.left = `${right.x + gap}px`;
+  earLabelRight.style.right = 'auto';
+  earLabelRight.style.top = `${right.y}px`;
+  earLabelRight.style.transform = 'translateY(-50%)';
+  earLabelRight.hidden = false;
 }
 
 function hideEarLabels(): void {
