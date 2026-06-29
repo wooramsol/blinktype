@@ -27,7 +27,6 @@ export function drawFaceOverlay(
   ctx.clearRect(0, 0, w, h);
 
   const contours: Connection[] = [
-    ...FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
     ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
     ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
   ];
