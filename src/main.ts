@@ -22,8 +22,6 @@ app.innerHTML = `
           <video id="video" autoplay muted playsinline webkit-playsinline></video>
         </div>
         <div id="ear-label" class="ear-label" hidden>EAR —</div>
-        <div id="camera-prompt" class="camera-prompt">Tap to start camera</div>
-        <div id="camera-error" class="camera-error" hidden></div>
       </div>
 
       <label class="field-label" for="output">Output text</label>
@@ -36,8 +34,6 @@ const videoWrap = document.querySelector<HTMLDivElement>('#video-wrap')!;
 const video = document.querySelector<HTMLVideoElement>('#video')!;
 const output = document.querySelector<HTMLTextAreaElement>('#output')!;
 const earLabel = document.querySelector<HTMLDivElement>('#ear-label')!;
-const cameraPrompt = document.querySelector<HTMLDivElement>('#camera-prompt')!;
-const cameraError = document.querySelector<HTMLDivElement>('#camera-error')!;
 
 let stream: MediaStream | null = null;
 let rafId = 0;
@@ -113,27 +109,6 @@ function positionEarLabel(landmarks: { x: number; y: number }[]): void {
   earLabel.hidden = false;
 }
 
-function showCameraError(message: string): void {
-  cameraError.textContent = message;
-  cameraError.hidden = false;
-  cameraPrompt.hidden = true;
-  videoWrap.classList.remove('is-live');
-  earLabel.hidden = true;
-}
-
-function showCameraPrompt(message = 'Tap to start camera'): void {
-  cameraPrompt.textContent = message;
-  cameraPrompt.hidden = false;
-  cameraError.hidden = true;
-  videoWrap.classList.remove('is-live');
-}
-
-function markCameraLive(): void {
-  cameraPrompt.hidden = true;
-  cameraError.hidden = true;
-  videoWrap.classList.add('is-live');
-}
-
 function isVideoLive(): boolean {
   return stream !== null && video.videoWidth > 0 && !video.paused;
 }
@@ -170,16 +145,10 @@ async function loadModel(): Promise<void> {
     engine = new FaceLandmarkerEngine();
     await engine.init();
     modelReady = true;
-  } catch (err) {
+  } catch {
     engine?.close();
     engine = null;
     modelReady = false;
-    earLabel.textContent =
-      err instanceof Error ? `Model error: ${err.message}` : 'Model error';
-    earLabel.style.left = '50%';
-    earLabel.style.top = '12px';
-    earLabel.style.transform = 'translate(-50%, 0)';
-    earLabel.hidden = false;
   }
 }
 
@@ -208,14 +177,9 @@ async function loop(): Promise<void> {
 
 async function startCamera(): Promise<void> {
   if (starting || stream) return;
-  if (!navigator.mediaDevices?.getUserMedia) {
-    showCameraError('Camera is not supported in this browser');
-    return;
-  }
+  if (!navigator.mediaDevices?.getUserMedia) return;
 
   starting = true;
-  cameraPrompt.textContent = 'Starting camera…';
-
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -223,32 +187,18 @@ async function startCamera(): Promise<void> {
     });
 
     video.srcObject = stream;
-    video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', '');
     video.muted = true;
 
     await video.play();
     await waitForVideoFrames();
 
-    if (!isVideoLive()) {
-      throw new Error('Camera preview is not available');
-    }
-
-    markCameraLive();
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(loop);
     void loadModel();
-  } catch (err) {
+  } catch {
     stream?.getTracks().forEach((t) => t.stop());
     stream = null;
     video.srcObject = null;
-
-    if (err instanceof DOMException && err.name === 'NotAllowedError') {
-      showCameraPrompt('Tap to allow camera');
-    } else {
-      showCameraError(err instanceof Error ? err.message : 'Camera error');
-      showCameraPrompt('Tap to retry');
-    }
   } finally {
     starting = false;
   }
