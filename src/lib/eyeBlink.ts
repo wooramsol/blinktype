@@ -22,36 +22,40 @@ export function averageEar(landmarks: Point2D[]): number {
   return (eyeAspectRatio(landmarks, LEFT_EYE) + eyeAspectRatio(landmarks, RIGHT_EYE)) / 2;
 }
 
-/** Selfie mirror view: screen-left = subject left eye, screen-right = subject right eye. */
+/** Selfie mirror: screen-left eye = subject right eye landmark set (raw video x is low). */
 export function selfieEyeEars(landmarks: Point2D[]): { left: number; right: number } {
   return {
-    left: eyeAspectRatio(landmarks, LEFT_EYE),
-    right: eyeAspectRatio(landmarks, RIGHT_EYE),
+    left: eyeAspectRatio(landmarks, RIGHT_EYE),
+    right: eyeAspectRatio(landmarks, LEFT_EYE),
   };
 }
 
-/** HUD anchor outside the selfie screen-left side of the face. */
-export function leftEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
-  const y =
-    (landmarks[160].y + landmarks[158].y + landmarks[153].y + landmarks[144].y) / 4;
+function faceWidth(landmarks: Point2D[]): number {
   const xMin = Math.min(landmarks[234].x, landmarks[454].x);
   const xMax = Math.max(landmarks[234].x, landmarks[454].x);
-  const faceWidth = xMax - xMin || 1;
+  return xMax - xMin || 1;
+}
+
+/** HUD anchor outside the selfie screen-left (user's left in the mirror). */
+export function leftEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
+  const y =
+    (landmarks[385].y + landmarks[387].y + landmarks[373].y + landmarks[380].y) / 4;
+  const width = faceWidth(landmarks);
+  const outer = landmarks[263];
   return {
-    x: xMax + faceWidth * 0.28,
+    x: outer.x - width * 0.18,
     y,
   };
 }
 
-/** HUD anchor outside the selfie screen-right side of the face. */
+/** HUD anchor outside the selfie screen-right (user's right in the mirror). */
 export function rightEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
   const y =
-    (landmarks[385].y + landmarks[387].y + landmarks[373].y + landmarks[380].y) / 4;
-  const xMin = Math.min(landmarks[234].x, landmarks[454].x);
-  const xMax = Math.max(landmarks[234].x, landmarks[454].x);
-  const faceWidth = xMax - xMin || 1;
+    (landmarks[160].y + landmarks[158].y + landmarks[153].y + landmarks[144].y) / 4;
+  const width = faceWidth(landmarks);
+  const outer = landmarks[33];
   return {
-    x: xMin - faceWidth * 0.28,
+    x: outer.x + width * 0.18,
     y,
   };
 }

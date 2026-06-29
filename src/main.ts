@@ -24,9 +24,9 @@ app.innerHTML = `
       <div class="video-mirror">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="overlay"></canvas>
+        <div id="ear-label-left" class="ear-label" hidden>L —</div>
+        <div id="ear-label-right" class="ear-label" hidden>R —</div>
       </div>
-      <div id="ear-label-left" class="ear-label ear-label-left" hidden>L —</div>
-      <div id="ear-label-right" class="ear-label ear-label-right" hidden>R —</div>
     </div>
     <textarea id="output" rows="8" spellcheck="false"></textarea>
   </div>
@@ -121,11 +121,12 @@ function positionEarLabel(
   el: HTMLElement,
   side: 'left' | 'right',
 ): void {
-  const screenX = 1 - anchor.x;
-  el.style.left = `${screenX * 100}%`;
+  el.style.left = `${(1 - anchor.x) * 100}%`;
   el.style.top = `${anchor.y * 100}%`;
   el.style.transform =
-    side === 'left' ? 'translate(6px, -50%)' : 'translate(calc(-100% - 6px), -50%)';
+    side === 'left'
+      ? 'scaleX(-1) translate(calc(-100% - 8px), -50%)'
+      : 'scaleX(-1) translate(8px, -50%)';
   el.hidden = false;
 }
 
