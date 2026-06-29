@@ -30,6 +30,18 @@ export function selfieEyeEars(landmarks: Point2D[]): { left: number; right: numb
   };
 }
 
+/** Anchor beside the selfie screen-left eye for EAR HUD (mirrored display uses 1 - x). */
+export function leftEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
+  const outer = landmarks[33];
+  const y =
+    (landmarks[160].y + landmarks[158].y + landmarks[153].y + landmarks[144].y) / 4;
+  const outward = 0.035;
+  return {
+    x: outer.x + outward,
+    y,
+  };
+}
+
 /** Anchor beside the selfie screen-right eye for EAR HUD (mirrored display uses 1 - x). */
 export function rightEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
   const outer = landmarks[263];

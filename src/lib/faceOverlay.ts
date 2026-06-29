@@ -31,7 +31,7 @@ export function drawFaceOverlay(
     ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
   ];
 
-  drawConnections(ctx, landmarks, contours, w, h, '#aaa', 1);
+  drawConnections(ctx, landmarks, contours, w, h, '#fff', 1);
 
   for (const i of [...LEFT_EYE, ...RIGHT_EYE]) {
     drawPoint(ctx, landmarks[i], w, h, '#fff', 2);
