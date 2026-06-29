@@ -8,11 +8,13 @@ import {
   morseToDisplay,
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
+import pkg from '../package.json';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 app.innerHTML = `
   <div class="layout">
+    <h1 class="title"># BlinkType v${pkg.version}</h1>
     <div id="video-wrap" class="video-wrap">
       <div class="video-mirror">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>

@@ -8,7 +8,7 @@ export interface MorseTimingConfig {
 
 export const DEFAULT_MORSE_TIMING: MorseTimingConfig = {
   letterGapMs: 900,
-  wordGapMs: 2400,
+  wordGapMs: 2000,
 };
 
 export interface MorseCommitEvent {
@@ -64,6 +64,9 @@ export class MorseStateMachine {
     } else {
       this.onCommit({ type: 'unknown', morse, char: '?' });
     }
+
+    this.clearTimers();
+    this.scheduleWordGap();
   }
 
   reset(): void {
