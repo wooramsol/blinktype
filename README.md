@@ -1,33 +1,33 @@
 # Blinktype
 
-웹캠으로 **눈 깜빡임**을 감지해 **모스 부호**로 해석하고, 텍스트 입력창에 문자를 입력하는 웹 앱입니다.
+A web app that detects **eye blinks** via webcam, interprets them as **Morse code**, and types characters into a text field.
 
 Live: https://wooramsol.github.io/blinktype/
 
-## 사용법
+## Usage
 
-1. **카메라 시작** — 전면 웹캠 권한을 허용합니다.
-2. (권장) **눈 감고 보정** — 눈을 감은 채로 버튼을 누른 뒤, 눈을 뜨면서 **보정 완료**를 누릅니다.
-3. 입력창에 포커스를 둔 상태에서 깜빡입니다.
-   - **짧은 깜빡임** → `·` (닷)
-   - **긴 깜빡임** → `−` (대시)
-4. 문자 간격이 지나면 자동으로 글자가 입력됩니다. 더 긴 간격은 공백입니다.
+1. **Start camera** — Allow front-facing webcam access.
+2. (Recommended) **Calibrate (close eyes)** — Press the button with eyes closed, then open your eyes and press **Finish calibration**.
+3. Focus the input field and blink:
+   - **Short blink** → `·` (dot)
+   - **Long blink** → `−` (dash)
+4. After a letter gap, characters are entered automatically. A longer gap inserts a space.
 
-## 로컬 실행
+## Local development
 
 ```bash
 npm install
 npm run dev
 ```
 
-## 배포
+## Deployment
 
-`main` 브랜치에 push하면 GitHub Actions가 https://wooramsol.github.io/blinktype/ 에 자동 배포합니다.
+Pushes to `main` automatically deploy to https://wooramsol.github.io/blinktype/ via GitHub Actions.
 
-## 제한 사항
+## Limitations
 
-브라우저 보안상 다른 앱으로 키 입력을 보낼 수 없습니다. 이 페이지의 텍스트 영역에만 입력됩니다.
+Browser security prevents sending keystrokes to other apps. Text is entered only in this page's text area.
 
-## 라이선스
+## License
 
 MIT
