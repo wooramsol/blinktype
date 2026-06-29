@@ -153,6 +153,10 @@ export interface BlinkDetectorConfig {
   /** Max ms between two bilateral blinks to register a space. */
   doubleBlinkWindowMs: number;
   spaceCooldownMs: number;
+  /** Min |L−R| EAR gap required for a wink (rejects near-symmetric closes). */
+  winkAsymmetryMin: number;
+  /** Other eye must be at or above this EAR for a wink. */
+  otherEyeOpenMin: number;
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
@@ -160,6 +164,8 @@ export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   rearmThreshold: 0.248,
   doubleBlinkWindowMs: 750,
   spaceCooldownMs: 500,
+  winkAsymmetryMin: 0.06,
+  otherEyeOpenMin: 0.27,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
@@ -199,23 +205,29 @@ export class BlinkDetector {
     firstBlinkAt: 0,
   };
   private lastSpaceAt = 0;
+  private winkSuppressUntil = 0;
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
   /** Selfie L wink = dot, R wink = dash, both eyes blink twice = space. */
   update(leftEar: number, rightEar: number, now = performance.now()): BlinkUpdateResult | null {
     this.expireBilateralSequence(now);
+    const suppressWink = this.isWinkSuppressed(now);
 
     if (this.updateBilateral(leftEar, rightEar, now)) {
       return { type: 'space' };
     }
 
-    const leftEvent = this.updateEye('left', leftEar, rightEar, this.left, now);
-    const rightEvent = this.updateEye('right', rightEar, leftEar, this.right, now);
+    const leftEvent = this.updateEye('left', leftEar, rightEar, this.left, suppressWink);
+    const rightEvent = this.updateEye('right', rightEar, leftEar, this.right, suppressWink);
 
     if (leftEvent && rightEvent) return null;
     const event = leftEvent ?? rightEvent;
     return event ? { type: 'wink', event } : null;
+  }
+
+  private isWinkSuppressed(now: number): boolean {
+    return now < this.winkSuppressUntil;
   }
 
   private expireBilateralSequence(now: number): void {
@@ -250,15 +262,18 @@ export class BlinkDetector {
       if (state.blinkCount === 0) {
         state.blinkCount = 1;
         state.firstBlinkAt = now;
+        this.winkSuppressUntil = now + this.config.doubleBlinkWindowMs;
       } else if (now - state.firstBlinkAt <= this.config.doubleBlinkWindowMs) {
         if (now - this.lastSpaceAt >= this.config.spaceCooldownMs) {
           state.blinkCount = 0;
           this.lastSpaceAt = now;
+          this.winkSuppressUntil = now + 250;
           fired = true;
         }
       } else {
         state.blinkCount = 1;
         state.firstBlinkAt = now;
+        this.winkSuppressUntil = now + this.config.doubleBlinkWindowMs;
       }
     }
 
@@ -272,7 +287,11 @@ export class BlinkDetector {
   }
 
   private otherEyeOpen(otherEar: number): boolean {
-    return otherEar > this.config.closedThreshold - 0.03;
+    return otherEar >= this.config.otherEyeOpenMin;
+  }
+
+  private isWinkAsymmetric(ear: number, otherEar: number): boolean {
+    return Math.abs(ear - otherEar) >= this.config.winkAsymmetryMin;
   }
 
   private updateEye(
@@ -280,7 +299,7 @@ export class BlinkDetector {
     ear: number,
     otherEar: number,
     state: EyeState,
-    _now: number,
+    suppress: boolean,
   ): BlinkEvent | null {
     if (state.prevEar === null) {
       state.prevEar = ear;
@@ -290,10 +309,12 @@ export class BlinkDetector {
     let event: BlinkEvent | null = null;
 
     if (
+      !suppress &&
       state.armed &&
       state.prevEar >= this.config.closedThreshold &&
       ear < this.config.closedThreshold &&
-      this.otherEyeOpen(otherEar)
+      this.otherEyeOpen(otherEar) &&
+      this.isWinkAsymmetric(ear, otherEar)
     ) {
       state.armed = false;
       event = {
