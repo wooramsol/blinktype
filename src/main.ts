@@ -213,6 +213,8 @@ async function loop(): Promise<void> {
       hideEarLabels();
       clearFaceOverlay(overlayCtx);
     }
+
+    morseMachine.tick(performance.now());
   }
 
   rafId = requestAnimationFrame(loop);
