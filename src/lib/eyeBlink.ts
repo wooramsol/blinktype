@@ -153,7 +153,7 @@ export function selfieEarHudPixels(
 export interface BlinkDetectorConfig {
   closedThreshold: number;
   rearmThreshold: number;
-  /** Ignore bilateral blinks shorter than this (noise). */
+  /** Ignore blinks shorter than this (noise). */
   minBlinkMs: number;
   /** Closed duration at or below this → dot; longer → dash. */
   dotMaxMs: number;
@@ -182,19 +182,19 @@ export class BlinkDetector {
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
-  /** Both eyes closed together: short blink = dot, long blink = dash. */
+  /** One or both eyes: short close = dot, long close = dash. */
   update(leftEar: number, rightEar: number, now = performance.now()): BlinkEvent | null {
     const { closedThreshold, rearmThreshold } = this.config;
-    const bothClosed = leftEar < closedThreshold && rightEar < closedThreshold;
-    const bothOpen = leftEar > rearmThreshold && rightEar > rearmThreshold;
+    const anyClosed = leftEar < closedThreshold || rightEar < closedThreshold;
+    const allOpen = leftEar > rearmThreshold && rightEar > rearmThreshold;
 
-    if (!this.inBlink && bothClosed) {
+    if (!this.inBlink && anyClosed) {
       this.inBlink = true;
       this.blinkStartedAt = now;
       return null;
     }
 
-    if (this.inBlink && bothOpen) {
+    if (this.inBlink && allOpen) {
       this.inBlink = false;
       const durationMs = now - this.blinkStartedAt;
       if (durationMs < this.config.minBlinkMs) return null;
