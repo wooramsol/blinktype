@@ -1,8 +1,5 @@
 const LEFT_EYE = [33, 160, 158, 133, 153, 144] as const;
 const RIGHT_EYE = [362, 385, 387, 263, 373, 380] as const;
-/** Brow arc above each eye — included in blink openness. */
-const LEFT_BROW_NEAR = [107, 66, 105] as const;
-const RIGHT_BROW_NEAR = [336, 296, 334] as const;
 
 export interface Point2D {
   x: number;
@@ -32,39 +29,8 @@ export function eyeAspectRatio(landmarks: Point2D[], indices: readonly number[])
   return vertical / (2 * horizontal);
 }
 
-/** How open the lid is relative to the brow — drops when winking/squinting. */
-export function eyeBrowSquintRatio(
-  landmarks: Point2D[],
-  eye: readonly number[],
-  brow: readonly number[],
-): number {
-  const [, p2, p3, , p5, p6] = eye.map((i) => landmarks[i]);
-  const lidVertical = dist(p2, p6) + dist(p3, p5);
-
-  const browCenter = centroid(brow.map((i) => landmarks[i]));
-  const upperLid = { x: (p2.x + p3.x) / 2, y: (p2.y + p3.y) / 2 };
-  const browGap = dist(browCenter, upperLid);
-
-  if (lidVertical + browGap === 0) return 1;
-  return lidVertical / (lidVertical + browGap);
-}
-
-/** Eye + brow combined openness (used for wink detection and HUD). */
-export function eyeOpenness(
-  landmarks: Point2D[],
-  eye: readonly number[],
-  brow: readonly number[],
-): number {
-  const ear = eyeAspectRatio(landmarks, eye);
-  const squint = eyeBrowSquintRatio(landmarks, eye, brow);
-  return ear * 0.4 + squint * 0.6;
-}
-
 export function averageEar(landmarks: Point2D[]): number {
-  return (
-    eyeOpenness(landmarks, LEFT_EYE, LEFT_BROW_NEAR) +
-    eyeOpenness(landmarks, RIGHT_EYE, RIGHT_BROW_NEAR)
-  ) / 2;
+  return (eyeAspectRatio(landmarks, LEFT_EYE) + eyeAspectRatio(landmarks, RIGHT_EYE)) / 2;
 }
 
 /** Push landmark indices outward from their region centroid (overlay). */
@@ -114,7 +80,7 @@ function selfieViewX(landmarkX: number): number {
 
 function mpLeftEye(landmarks: Point2D[]): ScreenEye {
   return {
-    ear: eyeOpenness(landmarks, LEFT_EYE, LEFT_BROW_NEAR),
+    ear: eyeAspectRatio(landmarks, LEFT_EYE),
     outer: landmarks[33],
     centerY: leftEyeCenterY(landmarks),
   };
@@ -122,7 +88,7 @@ function mpLeftEye(landmarks: Point2D[]): ScreenEye {
 
 function mpRightEye(landmarks: Point2D[]): ScreenEye {
   return {
-    ear: eyeOpenness(landmarks, RIGHT_EYE, RIGHT_BROW_NEAR),
+    ear: eyeAspectRatio(landmarks, RIGHT_EYE),
     outer: landmarks[263],
     centerY: rightEyeCenterY(landmarks),
   };
@@ -187,8 +153,8 @@ export interface BlinkDetectorConfig {
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
-  closedThreshold: 0.3,
-  openThreshold: 0.32,
+  closedThreshold: 0.23,
+  openThreshold: 0.26,
   minBlinkMs: 30,
 };
 
