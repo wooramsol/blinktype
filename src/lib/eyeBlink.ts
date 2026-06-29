@@ -57,7 +57,7 @@ export function eyeOpenness(
 ): number {
   const ear = eyeAspectRatio(landmarks, eye);
   const squint = eyeBrowSquintRatio(landmarks, eye, brow);
-  return ear * 0.55 + squint * 0.45;
+  return ear * 0.45 + squint * 0.55;
 }
 
 export function averageEar(landmarks: Point2D[]): number {
@@ -86,7 +86,7 @@ export function expandLandmarkRegion(
   return out;
 }
 
-export const EYE_OVERLAY_EXPAND = 1.1;
+export const EYE_OVERLAY_EXPAND = 1.3;
 
 type ScreenEye = {
   ear: number;
@@ -187,9 +187,9 @@ export interface BlinkDetectorConfig {
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
-  closedThreshold: 0.2,
-  openThreshold: 0.23,
-  minBlinkMs: 80,
+  closedThreshold: 0.26,
+  openThreshold: 0.28,
+  minBlinkMs: 55,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
@@ -231,7 +231,7 @@ export class BlinkDetector {
     if (
       !state.closed &&
       ear < this.config.closedThreshold &&
-      otherEar > this.config.openThreshold
+      otherEar > this.config.closedThreshold
     ) {
       state.closed = true;
       state.closeStartedAt = now;
@@ -242,7 +242,7 @@ export class BlinkDetector {
       state.closed = false;
       const durationMs = now - state.closeStartedAt;
       if (durationMs < this.config.minBlinkMs) return null;
-      if (otherEar <= this.config.openThreshold) return null;
+      if (otherEar <= this.config.closedThreshold) return null;
       return {
         symbol: eye === 'left' ? 'dot' : 'dash',
         eye,

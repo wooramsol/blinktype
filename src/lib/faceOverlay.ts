@@ -12,9 +12,16 @@ const EYE_CONTOURS: Connection[] = [
   ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
 ];
 
-const EYEBROW_CONTOURS: Connection[] = [
-  ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYEBROW,
-  ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW,
+/** Lower brow arc (eye-facing edge) per side — not the full eyebrow. */
+const LOWER_EYEBROW_CONTOURS: Connection[] = [
+  { start: 70, end: 63 },
+  { start: 63, end: 105 },
+  { start: 105, end: 66 },
+  { start: 66, end: 107 },
+  { start: 300, end: 293 },
+  { start: 293, end: 334 },
+  { start: 334, end: 296 },
+  { start: 296, end: 336 },
 ];
 
 const INNER_LIP_INDICES = new Set([
@@ -27,15 +34,9 @@ const INNER_LIP_CONTOURS: Connection[] = FaceLandmarker.FACE_LANDMARKS_LIPS.filt
     INNER_LIP_INDICES.has(connection.start) && INNER_LIP_INDICES.has(connection.end),
 );
 
-const LEFT_REGION = uniqueIndices([
-  ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
-  ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYEBROW,
-]);
-
-const RIGHT_REGION = uniqueIndices([
-  ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
-  ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW,
-]);
+const LEFT_EYE_INDICES = uniqueIndices(FaceLandmarker.FACE_LANDMARKS_LEFT_EYE);
+const RIGHT_EYE_INDICES = uniqueIndices(FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE);
+const LOWER_BROW_INDICES = uniqueIndices(LOWER_EYEBROW_CONTOURS);
 
 function uniqueIndices(connections: Connection[]): number[] {
   const set = new Set<number>();
@@ -47,9 +48,9 @@ function uniqueIndices(connections: Connection[]): number[] {
 }
 
 function expandedLandmarks(landmarks: Point2D[]): Map<number, Point2D> {
-  const left = expandLandmarkRegion(landmarks, LEFT_REGION, EYE_OVERLAY_EXPAND);
-  const right = expandLandmarkRegion(landmarks, RIGHT_REGION, EYE_OVERLAY_EXPAND);
-  return new Map([...left, ...right]);
+  const leftEye = expandLandmarkRegion(landmarks, LEFT_EYE_INDICES, EYE_OVERLAY_EXPAND);
+  const rightEye = expandLandmarkRegion(landmarks, RIGHT_EYE_INDICES, EYE_OVERLAY_EXPAND);
+  return new Map([...leftEye, ...rightEye]);
 }
 
 export function resizeOverlayCanvas(
@@ -75,12 +76,15 @@ export function drawFaceOverlay(
   const expanded = expandedLandmarks(landmarks);
 
   drawConnections(ctx, landmarks, EYE_CONTOURS, w, h, '#fff', 1, expanded);
-  drawConnections(ctx, landmarks, EYEBROW_CONTOURS, w, h, '#fff', 1, expanded);
+  drawConnections(ctx, landmarks, LOWER_EYEBROW_CONTOURS, w, h, '#fff', 1);
   drawConnections(ctx, landmarks, INNER_LIP_CONTOURS, w, h, '#fff', 1);
 
-  for (const i of [...LEFT_REGION, ...RIGHT_REGION]) {
+  for (const i of [...LEFT_EYE_INDICES, ...RIGHT_EYE_INDICES]) {
     const p = expanded.get(i) ?? landmarks[i];
     drawPoint(ctx, p, w, h, '#fff', 2);
+  }
+  for (const i of LOWER_BROW_INDICES) {
+    drawPoint(ctx, landmarks[i], w, h, '#fff', 2);
   }
 }
 
