@@ -3,7 +3,6 @@ import { FaceLandmarkerEngine } from './lib/faceLandmarker';
 import { BlinkDetector, selfieEarHudPixels, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
-import { HeadNodDetector, noseOffsetY } from './lib/headNod';
 import {
   MorseStateMachine,
   DEFAULT_MORSE_TIMING,
@@ -50,7 +49,6 @@ let modelReady = false;
 let starting = false;
 const blinkDetector = new BlinkDetector();
 const headShakeDetector = new HeadShakeDetector();
-const headNodDetector = new HeadNodDetector();
 const morseAudio = new MorseAudio();
 let committedText = '';
 let pendingBuffer = '';
@@ -61,12 +59,7 @@ function displayValue(): string {
 }
 
 function parseCommittedDisplay(display: string): string {
-  // Manual spaces (head nod) are preserved; auto spaces from display collapse per chunk.
-  return display
-    .split(' ')
-    .map((chunk) => lettersOnly(chunk))
-    .filter((chunk) => chunk.length > 0)
-    .join(' ');
+  return lettersOnly(display);
 }
 
 function syncOutput(): void {
@@ -126,12 +119,6 @@ function backspaceOutput(): void {
   } else if (committedText.length > 0) {
     committedText = committedText.slice(0, -1);
   }
-  syncOutput();
-}
-
-function spaceOutput(): void {
-  morseMachine.flush();
-  committedText += ' ';
   syncOutput();
 }
 
@@ -223,8 +210,6 @@ async function loop(): Promise<void> {
       if (blink) {
         morseAudio.play(blink.symbol);
         morseMachine.onBlink(blink, now);
-      } else if (headNodDetector.update(noseOffsetY(frame.landmarks), now)) {
-        spaceOutput();
       } else if (headShakeDetector.update(noseOffsetX(frame.landmarks), now)) {
         backspaceOutput();
       }
