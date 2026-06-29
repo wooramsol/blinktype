@@ -30,9 +30,6 @@ export function drawFaceOverlay(
     ...FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
     ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
     ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
-    ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYEBROW,
-    ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW,
-    ...FaceLandmarker.FACE_LANDMARKS_LIPS,
   ];
 
   drawConnections(ctx, landmarks, contours, w, h, 'rgba(91, 140, 255, 0.75)', 1.25);
