@@ -20,3 +20,22 @@ export const DOT_MAX_MS_SLIDER_MAX = MORSE_UNIT_MS * 6;
 export const LETTER_GAP_MS_SLIDER_MIN = MORSE_UNIT_MS;
 export const LETTER_GAP_MS_SLIDER_MAX = MORSE_UNIT_MS * 15;
 export const LETTER_GAP_MS_SLIDER_STEP = 50;
+
+/** Ignore blinks shorter than this (noise filter). */
+export const MIN_BLINK_MS_DEFAULT = Math.round(MORSE_UNIT_MS * 0.55);
+export const MIN_BLINK_MS_SLIDER_MIN = 20;
+export const MIN_BLINK_MS_SLIDER_MAX = 150;
+export const MIN_BLINK_MS_SLIDER_STEP = 5;
+
+/** Refractory period after each accepted blink (rapid ·-.· needs this low). */
+export const COOLDOWN_MS_DEFAULT = 60;
+export const COOLDOWN_MS_SLIDER_MIN = 0;
+export const COOLDOWN_MS_SLIDER_MAX = 300;
+export const COOLDOWN_MS_SLIDER_STEP = 10;
+
+/** EAR below this counts as eye closed (×1000 for slider). */
+export const EAR_CLOSED_DEFAULT = 240;
+export const EAR_CLOSED_SLIDER_MIN = 150;
+export const EAR_CLOSED_SLIDER_MAX = 300;
+export const EAR_CLOSED_SLIDER_STEP = 2;
+export const EAR_REARM_DELTA = 0.006;
