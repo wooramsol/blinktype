@@ -5,7 +5,6 @@ import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/fa
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import {
   MorseStateMachine,
-  DEFAULT_MORSE_TIMING,
   morseToDisplay,
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
@@ -13,7 +12,11 @@ import { MorseAudio } from './lib/morseAudio';
 import {
   DOT_MAX_MS_SLIDER_MAX,
   DOT_MAX_MS_SLIDER_MIN,
+  LETTER_GAP_MS_SLIDER_MAX,
+  LETTER_GAP_MS_SLIDER_MIN,
+  LETTER_GAP_MS_SLIDER_STEP,
   MORSE_DOT_DASH_THRESHOLD_MS,
+  MORSE_LETTER_GAP_MS,
 } from './lib/morseTiming';
 import { formatCommittedText, lettersOnly } from './lib/wordSegment';
 import pkg from '../package.json';
@@ -28,10 +31,17 @@ app.innerHTML = `
       <span class="credit">@wooramsol</span>
     </div>
     <div id="video-wrap" class="video-wrap">
-      <div class="blink-threshold" id="blink-threshold">
-        <label for="dot-max-ms">·/− ms</label>
-        <input type="range" id="dot-max-ms" min="${DOT_MAX_MS_SLIDER_MIN}" max="${DOT_MAX_MS_SLIDER_MAX}" step="10" value="${MORSE_DOT_DASH_THRESHOLD_MS}" />
-        <span id="dot-max-ms-val">${MORSE_DOT_DASH_THRESHOLD_MS}</span>
+      <div class="video-controls">
+        <div class="timing-control">
+          <label for="dot-max-ms">·/− ms</label>
+          <input type="range" id="dot-max-ms" min="${DOT_MAX_MS_SLIDER_MIN}" max="${DOT_MAX_MS_SLIDER_MAX}" step="10" value="${MORSE_DOT_DASH_THRESHOLD_MS}" />
+          <span id="dot-max-ms-val">${MORSE_DOT_DASH_THRESHOLD_MS}</span>
+        </div>
+        <div class="timing-control">
+          <label for="letter-gap-ms">letter ms</label>
+          <input type="range" id="letter-gap-ms" min="${LETTER_GAP_MS_SLIDER_MIN}" max="${LETTER_GAP_MS_SLIDER_MAX}" step="${LETTER_GAP_MS_SLIDER_STEP}" value="${MORSE_LETTER_GAP_MS}" />
+          <span id="letter-gap-ms-val">${MORSE_LETTER_GAP_MS}</span>
+        </div>
       </div>
       <div class="video-mirror">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
@@ -51,6 +61,8 @@ const output = document.querySelector<HTMLTextAreaElement>('#output')!;
 const earLabel = document.querySelector<HTMLDivElement>('#ear-label')!;
 const dotMaxMsInput = document.querySelector<HTMLInputElement>('#dot-max-ms')!;
 const dotMaxMsVal = document.querySelector<HTMLSpanElement>('#dot-max-ms-val')!;
+const letterGapMsInput = document.querySelector<HTMLInputElement>('#letter-gap-ms')!;
+const letterGapMsVal = document.querySelector<HTMLSpanElement>('#letter-gap-ms-val')!;
 
 let stream: MediaStream | null = null;
 let rafId = 0;
@@ -69,6 +81,18 @@ const initialDotMaxMs =
 
 dotMaxMsInput.value = String(initialDotMaxMs);
 dotMaxMsVal.textContent = String(initialDotMaxMs);
+
+const LETTER_GAP_MS_KEY = 'blinktype-letterGapMs';
+const savedLetterGapMs = Number(localStorage.getItem(LETTER_GAP_MS_KEY));
+const initialLetterGapMs =
+  Number.isFinite(savedLetterGapMs) &&
+  savedLetterGapMs >= LETTER_GAP_MS_SLIDER_MIN &&
+  savedLetterGapMs <= LETTER_GAP_MS_SLIDER_MAX
+    ? savedLetterGapMs
+    : MORSE_LETTER_GAP_MS;
+
+letterGapMsInput.value = String(initialLetterGapMs);
+letterGapMsVal.textContent = String(initialLetterGapMs);
 
 const blinkDetector = new BlinkDetector();
 blinkDetector.setConfig({ dotMaxMs: initialDotMaxMs });
@@ -124,7 +148,7 @@ function onUserEdit(): void {
 }
 
 const morseMachine = new MorseStateMachine(
-  DEFAULT_MORSE_TIMING,
+  { letterGapMs: initialLetterGapMs },
   (event: MorseCommitEvent) => {
     committedText += event.char.toLowerCase();
     pendingBuffer = '';
@@ -170,6 +194,16 @@ function syncDotMaxMs(ms: number): void {
 
 dotMaxMsInput.addEventListener('input', () => {
   syncDotMaxMs(Number(dotMaxMsInput.value));
+});
+
+function syncLetterGapMs(ms: number): void {
+  letterGapMsVal.textContent = String(ms);
+  morseMachine.setTiming({ letterGapMs: ms });
+  localStorage.setItem(LETTER_GAP_MS_KEY, String(ms));
+}
+
+letterGapMsInput.addEventListener('input', () => {
+  syncLetterGapMs(Number(letterGapMsInput.value));
 });
 
 function isVideoLive(): boolean {

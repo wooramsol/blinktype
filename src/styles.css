@@ -107,11 +107,18 @@ body {
   transform: translate(-50%, -50%);
 }
 
-.blink-threshold {
+.video-controls {
   position: absolute;
   top: 8px;
   right: 8px;
   z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.timing-control {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -121,16 +128,15 @@ body {
   font: inherit;
   font-size: 11px;
   color: #fff;
-  pointer-events: auto;
 }
 
-.blink-threshold input[type='range'] {
+.timing-control input[type='range'] {
   width: 88px;
   margin: 0;
   accent-color: #fff;
 }
 
-.blink-threshold label {
+.timing-control label {
   white-space: nowrap;
 }
 
