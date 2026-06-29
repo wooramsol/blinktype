@@ -198,7 +198,7 @@ async function loop(): Promise<void> {
       const eyes = selfieScreenEyes(frame.landmarks);
       positionEarLabels(frame.landmarks, eyes);
 
-      const blink = blinkDetector.update(frame.ear, now);
+      const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
       if (blink) {
         morseMachine.onBlink(blink, now);
       } else if (mouthOpenDetector.update(mouthOpenRatio(frame.landmarks), now)) {
