@@ -88,7 +88,6 @@ body {
   pointer-events: none;
   z-index: 2;
   white-space: nowrap;
-  transform-origin: center center;
 }
 
 #output {

@@ -22,42 +22,30 @@ export function averageEar(landmarks: Point2D[]): number {
   return (eyeAspectRatio(landmarks, LEFT_EYE) + eyeAspectRatio(landmarks, RIGHT_EYE)) / 2;
 }
 
-/** Selfie mirror: screen-left eye = subject right eye landmark set (raw video x is low). */
+/** Selfie: left eye on screen-left, right eye on screen-right. */
 export function selfieEyeEars(landmarks: Point2D[]): { left: number; right: number } {
   return {
-    left: eyeAspectRatio(landmarks, RIGHT_EYE),
-    right: eyeAspectRatio(landmarks, LEFT_EYE),
+    left: eyeAspectRatio(landmarks, LEFT_EYE),
+    right: eyeAspectRatio(landmarks, RIGHT_EYE),
   };
 }
 
-function faceWidth(landmarks: Point2D[]): number {
-  const xMin = Math.min(landmarks[234].x, landmarks[454].x);
-  const xMax = Math.max(landmarks[234].x, landmarks[454].x);
-  return xMax - xMin || 1;
+function leftEyeCenterY(landmarks: Point2D[]): number {
+  return (landmarks[160].y + landmarks[158].y + landmarks[153].y + landmarks[144].y) / 4;
 }
 
-/** HUD anchor outside the selfie screen-left (user's left in the mirror). */
+function rightEyeCenterY(landmarks: Point2D[]): number {
+  return (landmarks[385].y + landmarks[387].y + landmarks[373].y + landmarks[380].y) / 4;
+}
+
+/** Selfie left eye outer corner — label sits further left via CSS. */
 export function leftEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
-  const y =
-    (landmarks[385].y + landmarks[387].y + landmarks[373].y + landmarks[380].y) / 4;
-  const width = faceWidth(landmarks);
-  const outer = landmarks[263];
-  return {
-    x: outer.x - width * 0.18,
-    y,
-  };
+  return { x: landmarks[33].x, y: leftEyeCenterY(landmarks) };
 }
 
-/** HUD anchor outside the selfie screen-right (user's right in the mirror). */
+/** Selfie right eye outer corner — label sits further right via CSS. */
 export function rightEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
-  const y =
-    (landmarks[160].y + landmarks[158].y + landmarks[153].y + landmarks[144].y) / 4;
-  const width = faceWidth(landmarks);
-  const outer = landmarks[33];
-  return {
-    x: outer.x + width * 0.18,
-    y,
-  };
+  return { x: landmarks[263].x, y: rightEyeCenterY(landmarks) };
 }
 
 export interface BlinkDetectorConfig {
