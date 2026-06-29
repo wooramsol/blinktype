@@ -10,7 +10,7 @@ export const DEFAULT_MORSE_TIMING: MorseTimingConfig = {
 };
 
 export interface MorseCommitEvent {
-  type: 'letter' | 'space' | 'unknown';
+  type: 'letter' | 'unknown';
   morse: string;
   char: string;
 }
@@ -30,12 +30,6 @@ export class MorseStateMachine {
     this.buffer += event.symbol === 'dot' ? '.' : '-';
     this.onBufferChange(this.buffer);
     this.letterDeadline = now + this.timing.letterGapMs;
-  }
-
-  onSpace(_now = performance.now()): void {
-    this.letterDeadline = 0;
-    this.commitLetter();
-    this.onCommit({ type: 'space', morse: '', char: ' ' });
   }
 
   /** Call every animation frame; letter gap is fixed and never shortens over time. */
