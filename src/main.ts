@@ -3,6 +3,7 @@ import { FaceLandmarkerEngine } from './lib/faceLandmarker';
 import { BlinkDetector, selfieEarHudPixels, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
+import { HeadNodDetector, noseOffsetY } from './lib/headNod';
 import {
   MorseStateMachine,
   DEFAULT_MORSE_TIMING,
@@ -10,7 +11,6 @@ import {
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
 import { MorseAudio } from './lib/morseAudio';
-import { lettersOnly, segmentWords } from './lib/wordSegment';
 import pkg from '../package.json';
 import { versionLabel } from './buildRef';
 
@@ -49,17 +49,13 @@ let modelReady = false;
 let starting = false;
 const blinkDetector = new BlinkDetector();
 const headShakeDetector = new HeadShakeDetector();
+const headNodDetector = new HeadNodDetector();
 const morseAudio = new MorseAudio();
 let committedText = '';
 let pendingBuffer = '';
 
 function displayValue(): string {
-  const spaced = committedText ? segmentWords(committedText) : '';
-  return spaced + (pendingBuffer ? morseToDisplay(pendingBuffer) : '');
-}
-
-function parseCommittedDisplay(display: string): string {
-  return lettersOnly(display);
+  return committedText + (pendingBuffer ? morseToDisplay(pendingBuffer) : '');
 }
 
 function syncOutput(): void {
@@ -90,11 +86,11 @@ function onUserEdit(): void {
   const val = output.value;
 
   if (pendingDisplay && val.endsWith(pendingDisplay)) {
-    committedText = parseCommittedDisplay(val.slice(0, -pendingDisplay.length));
+    committedText = val.slice(0, -pendingDisplay.length);
     return;
   }
 
-  committedText = parseCommittedDisplay(val);
+  committedText = val;
   pendingBuffer = '';
   morseMachine.reset();
 }
@@ -119,6 +115,12 @@ function backspaceOutput(): void {
   } else if (committedText.length > 0) {
     committedText = committedText.slice(0, -1);
   }
+  syncOutput();
+}
+
+function spaceOutput(): void {
+  morseMachine.flush();
+  committedText += ' ';
   syncOutput();
 }
 
@@ -210,6 +212,8 @@ async function loop(): Promise<void> {
       if (blink) {
         morseAudio.play(blink.symbol);
         morseMachine.onBlink(blink, now);
+      } else if (headNodDetector.update(noseOffsetY(frame.landmarks), now)) {
+        spaceOutput();
       } else if (headShakeDetector.update(noseOffsetX(frame.landmarks), now)) {
         backspaceOutput();
       }
