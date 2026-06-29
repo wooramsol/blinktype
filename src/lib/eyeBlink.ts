@@ -86,7 +86,7 @@ export function expandLandmarkRegion(
   return out;
 }
 
-export const EYE_OVERLAY_EXPAND = 1.3;
+export const EYE_OVERLAY_EXPAND = 1.1;
 
 type ScreenEye = {
   ear: number;
