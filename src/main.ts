@@ -1,6 +1,6 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector, selfieEarLabelAnchors, selfieScreenEyes } from './lib/eyeBlink';
+import { BlinkDetector, selfieEarHudPixels, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import { MouthOpenDetector, mouthOpenRatio } from './lib/mouthOpen';
@@ -11,22 +11,23 @@ import {
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
 import pkg from '../package.json';
+import { versionLabel } from './buildRef';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 app.innerHTML = `
   <div class="layout">
     <div class="title-row">
-      <h1 class="title"># BlinkType v${pkg.version} · 3decccc</h1>
+      <h1 class="title"># BlinkType ${versionLabel(pkg.version)}</h1>
       <span class="credit">@wooramsol</span>
     </div>
     <div id="video-wrap" class="video-wrap">
       <div class="video-mirror">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="overlay"></canvas>
-        <div id="ear-label-left" class="ear-label ear-label-left" hidden>L —</div>
-        <div id="ear-label-right" class="ear-label ear-label-right" hidden>R —</div>
       </div>
+      <div id="ear-label-left" class="ear-label ear-hud-left" hidden>L —</div>
+      <div id="ear-label-right" class="ear-label ear-hud-right" hidden>R —</div>
     </div>
     <textarea id="output" rows="8" spellcheck="false"></textarea>
   </div>
@@ -120,18 +121,20 @@ function positionEarLabels(
   landmarks: { x: number; y: number }[],
   eyes: ReturnType<typeof selfieScreenEyes>,
 ): void {
-  const { screenLeft, screenRight } = selfieEarLabelAnchors(landmarks, eyes);
+  const w = videoWrap.clientWidth;
+  const h = videoWrap.clientHeight;
+  if (w === 0 || h === 0) return;
+
+  const { screenLeft, screenRight } = selfieEarHudPixels(landmarks, w, h, eyes);
 
   earLabelLeft.textContent = `L ${eyes.screenLeft.ear.toFixed(3)}`;
-  earLabelLeft.style.left = `${screenLeft.x * 100}%`;
-  earLabelLeft.style.top = `${screenLeft.y * 100}%`;
-  earLabelLeft.style.right = 'auto';
+  earLabelLeft.style.left = `${screenLeft.x}px`;
+  earLabelLeft.style.top = `${screenLeft.y}px`;
   earLabelLeft.hidden = false;
 
   earLabelRight.textContent = `R ${eyes.screenRight.ear.toFixed(3)}`;
-  earLabelRight.style.left = `${screenRight.x * 100}%`;
-  earLabelRight.style.top = `${screenRight.y * 100}%`;
-  earLabelRight.style.right = 'auto';
+  earLabelRight.style.left = `${screenRight.x}px`;
+  earLabelRight.style.top = `${screenRight.y}px`;
   earLabelRight.hidden = false;
 }
 

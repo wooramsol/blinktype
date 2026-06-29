@@ -24,7 +24,8 @@ export function averageEar(landmarks: Point2D[]): number {
 
 type ScreenEye = {
   ear: number;
-  outerX: number;
+  /** Outer canthus (eye tail) in normalized landmark space. */
+  outer: Point2D;
   centerY: number;
 };
 
@@ -40,52 +41,70 @@ function eyeCenterX(landmarks: Point2D[], inner: number, outer: number): number 
   return (landmarks[inner].x + landmarks[outer].x) / 2;
 }
 
+/** Map landmark x to selfie preview x (video is mirrored). */
+function selfieViewX(landmarkX: number): number {
+  return 1 - landmarkX;
+}
+
+function mpLeftEye(landmarks: Point2D[]): ScreenEye {
+  return {
+    ear: eyeAspectRatio(landmarks, LEFT_EYE),
+    outer: landmarks[33],
+    centerY: leftEyeCenterY(landmarks),
+  };
+}
+
+function mpRightEye(landmarks: Point2D[]): ScreenEye {
+  return {
+    ear: eyeAspectRatio(landmarks, RIGHT_EYE),
+    outer: landmarks[263],
+    centerY: rightEyeCenterY(landmarks),
+  };
+}
+
 /**
- * Selfie mirror (scaleX -1): higher raw landmark x appears on the viewer's left.
- * screen-left = user's left eye in the selfie preview.
+ * Selfie preview: screen-left = viewer's left = subject's left eye (L, dot).
+ * screen-right = viewer's right = subject's right eye (R, dash).
  */
 export function selfieScreenEyes(landmarks: Point2D[]): {
   screenLeft: ScreenEye;
   screenRight: ScreenEye;
 } {
-  const mpLeft: ScreenEye = {
-    ear: eyeAspectRatio(landmarks, LEFT_EYE),
-    outerX: landmarks[33].x,
-    centerY: leftEyeCenterY(landmarks),
-  };
-  const mpRight: ScreenEye = {
-    ear: eyeAspectRatio(landmarks, RIGHT_EYE),
-    outerX: landmarks[263].x,
-    centerY: rightEyeCenterY(landmarks),
-  };
+  const mpLeft = mpLeftEye(landmarks);
+  const mpRight = mpRightEye(landmarks);
 
-  const mpLeftCenterX = eyeCenterX(landmarks, 133, 33);
-  const mpRightCenterX = eyeCenterX(landmarks, 362, 263);
+  const leftOnScreen = selfieViewX(eyeCenterX(landmarks, 133, 33));
+  const rightOnScreen = selfieViewX(eyeCenterX(landmarks, 362, 263));
 
-  if (mpLeftCenterX > mpRightCenterX) {
+  if (leftOnScreen < rightOnScreen) {
     return { screenLeft: mpLeft, screenRight: mpRight };
   }
   return { screenLeft: mpRight, screenRight: mpLeft };
 }
 
-/** Normalized anchor (0–1), same space as the face overlay inside the mirror. */
-export function selfieEarLabelAnchors(
+/**
+ * Pixel positions in video-wrap (outside the mirror layer).
+ * Anchors sit just outside each eye's outer canthus and follow head movement.
+ */
+export function selfieEarHudPixels(
   landmarks: Point2D[],
+  width: number,
+  height: number,
   eyes = selfieScreenEyes(landmarks),
-): {
-  screenLeft: Point2D;
-  screenRight: Point2D;
-} {
-  const nose = landmarks[1];
-  const pad = 0.055;
+): { screenLeft: Point2D; screenRight: Point2D } {
+  const noseX = selfieViewX(landmarks[1].x) * width;
+  const noseY = landmarks[1].y * height;
+  const pad = Math.max(12, width * 0.032);
 
   const pushOut = (eye: ScreenEye): Point2D => {
-    const dx = eye.outerX - nose.x;
-    const dy = eye.centerY - nose.y;
+    const ox = selfieViewX(eye.outer.x) * width;
+    const oy = eye.centerY * height;
+    const dx = ox - noseX;
+    const dy = oy - noseY;
     const len = Math.hypot(dx, dy) || 1;
     return {
-      x: eye.outerX + (dx / len) * pad,
-      y: eye.centerY + (dy / len) * pad,
+      x: ox + (dx / len) * pad,
+      y: oy + (dy / len) * pad,
     };
   };
 
@@ -127,7 +146,7 @@ export class BlinkDetector {
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
-  /** Selfie left eye = dot, selfie right eye = dash. Requires the other eye to stay open (wink). */
+  /** Selfie L wink = dot, selfie R wink = dash. Other eye must stay open. */
   update(leftEar: number, rightEar: number, now = performance.now()): BlinkEvent | null {
     const leftEvent = this.updateEye('left', leftEar, rightEar, this.left, now);
     const rightEvent = this.updateEye('right', rightEar, leftEar, this.right, now);
