@@ -95,8 +95,7 @@ function mpRightEye(landmarks: Point2D[]): ScreenEye {
 }
 
 /**
- * Selfie preview: screen-left = viewer's left = subject's left eye (L, dot).
- * screen-right = viewer's right = subject's right eye (R, dash).
+ * Selfie preview: screen-left / screen-right eye slots for HUD placement.
  */
 export function selfieScreenEyes(landmarks: Point2D[]): {
   screenLeft: ScreenEye;
@@ -148,82 +147,62 @@ export function selfieEarHudPixels(
 
 export interface BlinkDetectorConfig {
   closedThreshold: number;
-  /** EAR must rise above this to arm the next wink (keep close to closed for fast re-arm). */
   rearmThreshold: number;
+  /** Ignore bilateral blinks shorter than this (noise). */
+  minBlinkMs: number;
+  /** Closed duration at or below this → dot; longer → dash. */
+  dotMaxMs: number;
+  cooldownMs: number;
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   closedThreshold: 0.24,
   rearmThreshold: 0.246,
+  minBlinkMs: 55,
+  dotMaxMs: 220,
+  cooldownMs: 100,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
-export type SelfieEye = 'left' | 'right';
 
 export interface BlinkEvent {
   symbol: BlinkSymbol;
-  eye: SelfieEye;
   durationMs: number;
 }
 
-type EyeState = {
-  prevEar: number | null;
-  armed: boolean;
-};
-
 export class BlinkDetector {
-  private left: EyeState = { prevEar: null, armed: true };
-  private right: EyeState = { prevEar: null, armed: true };
+  private inBlink = false;
+  private blinkStartedAt = 0;
+  private lastEventAt = 0;
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
-  /** Selfie L wink = dot, selfie R wink = dash. Other eye must stay open. */
+  /** Both eyes closed together: short blink = dot, long blink = dash. */
   update(leftEar: number, rightEar: number, now = performance.now()): BlinkEvent | null {
-    const leftEvent = this.updateEye('left', leftEar, rightEar, this.left, now);
-    const rightEvent = this.updateEye('right', rightEar, leftEar, this.right, now);
+    const { closedThreshold, rearmThreshold } = this.config;
+    const bothClosed = leftEar < closedThreshold && rightEar < closedThreshold;
+    const bothOpen = leftEar > rearmThreshold && rightEar > rearmThreshold;
 
-    if (leftEvent && rightEvent) return null;
-    return leftEvent ?? rightEvent;
-  }
-
-  private otherEyeOpen(otherEar: number): boolean {
-    return otherEar > this.config.closedThreshold - 0.04;
-  }
-
-  private updateEye(
-    eye: SelfieEye,
-    ear: number,
-    otherEar: number,
-    state: EyeState,
-    _now: number,
-  ): BlinkEvent | null {
-    if (state.prevEar === null) {
-      state.prevEar = ear;
+    if (!this.inBlink && bothClosed) {
+      this.inBlink = true;
+      this.blinkStartedAt = now;
       return null;
     }
 
-    let event: BlinkEvent | null = null;
+    if (this.inBlink && bothOpen) {
+      this.inBlink = false;
+      const durationMs = now - this.blinkStartedAt;
+      if (durationMs < this.config.minBlinkMs) return null;
+      if (now - this.lastEventAt < this.config.cooldownMs) return null;
 
-    if (
-      state.armed &&
-      state.prevEar >= this.config.closedThreshold &&
-      ear < this.config.closedThreshold &&
-      this.otherEyeOpen(otherEar)
-    ) {
-      state.armed = false;
-      event = {
-        symbol: eye === 'left' ? 'dot' : 'dash',
-        eye,
-        durationMs: 0,
+      this.lastEventAt = now;
+      return {
+        symbol: durationMs <= this.config.dotMaxMs ? 'dot' : 'dash',
+        durationMs,
       };
     }
 
-    if (!state.armed && ear > this.config.rearmThreshold) {
-      state.armed = true;
-    }
-
-    state.prevEar = ear;
-    return event;
+    return null;
   }
 
   setConfig(config: Partial<BlinkDetectorConfig>): void {

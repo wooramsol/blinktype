@@ -1,6 +1,6 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector, selfieEarHudPixels, selfieScreenEyes } from './lib/eyeBlink';
+import { BlinkDetector, averageEar, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import {
@@ -27,8 +27,7 @@ app.innerHTML = `
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="overlay"></canvas>
       </div>
-      <div id="ear-label-left" class="ear-label ear-hud-left" hidden>L —</div>
-      <div id="ear-label-right" class="ear-label ear-hud-right" hidden>R —</div>
+      <div id="ear-label" class="ear-label mouth-hud" hidden>E —</div>
     </div>
     <textarea id="output" rows="8" spellcheck="false"></textarea>
   </div>
@@ -39,8 +38,7 @@ const video = document.querySelector<HTMLVideoElement>('#video')!;
 const overlay = document.querySelector<HTMLCanvasElement>('#overlay')!;
 const overlayCtx = overlay.getContext('2d')!;
 const output = document.querySelector<HTMLTextAreaElement>('#output')!;
-const earLabelLeft = document.querySelector<HTMLDivElement>('#ear-label-left')!;
-const earLabelRight = document.querySelector<HTMLDivElement>('#ear-label-right')!;
+const earLabel = document.querySelector<HTMLDivElement>('#ear-label')!;
 
 let stream: MediaStream | null = null;
 let rafId = 0;
@@ -122,30 +120,20 @@ function backspaceOutput(): void {
   syncOutput();
 }
 
-function positionEarLabels(
-  landmarks: { x: number; y: number }[],
-  eyes: ReturnType<typeof selfieScreenEyes>,
-): void {
+function positionEarLabel(landmarks: { x: number; y: number }[]): void {
   const w = videoWrap.clientWidth;
   const h = videoWrap.clientHeight;
   if (w === 0 || h === 0) return;
 
-  const { screenLeft, screenRight } = selfieEarHudPixels(landmarks, w, h, eyes);
-
-  earLabelLeft.textContent = `L ${eyes.screenLeft.ear.toFixed(3)}`;
-  earLabelLeft.style.left = `${screenLeft.x}px`;
-  earLabelLeft.style.top = `${screenLeft.y}px`;
-  earLabelLeft.hidden = false;
-
-  earLabelRight.textContent = `R ${eyes.screenRight.ear.toFixed(3)}`;
-  earLabelRight.style.left = `${screenRight.x}px`;
-  earLabelRight.style.top = `${screenRight.y}px`;
-  earLabelRight.hidden = false;
+  const ear = averageEar(landmarks);
+  earLabel.textContent = `E ${ear.toFixed(3)}`;
+  earLabel.style.left = `${w * 0.5}px`;
+  earLabel.style.top = `${h * 0.88}px`;
+  earLabel.hidden = false;
 }
 
-function hideEarLabels(): void {
-  earLabelLeft.hidden = true;
-  earLabelRight.hidden = true;
+function hideEarLabel(): void {
+  earLabel.hidden = true;
 }
 
 function isVideoLive(): boolean {
@@ -203,9 +191,9 @@ async function loop(): Promise<void> {
       resizeOverlayCanvas(overlay, video);
       drawFaceOverlay(overlayCtx, frame.landmarks);
 
-      const eyes = selfieScreenEyes(frame.landmarks);
-      positionEarLabels(frame.landmarks, eyes);
+      positionEarLabel(frame.landmarks);
 
+      const eyes = selfieScreenEyes(frame.landmarks);
       const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
       if (blink) {
         morseAudio.play(blink.symbol);
@@ -214,7 +202,7 @@ async function loop(): Promise<void> {
         backspaceOutput();
       }
     } else {
-      hideEarLabels();
+      hideEarLabel();
       clearFaceOverlay(overlayCtx);
     }
 
