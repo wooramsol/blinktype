@@ -32,7 +32,7 @@ export class MorseStateMachine {
     this.letterDeadline = now + this.timing.letterGapMs;
   }
 
-  onMouthSpace(_now = performance.now()): void {
+  onSpace(_now = performance.now()): void {
     this.letterDeadline = 0;
     this.commitLetter();
     this.onCommit({ type: 'space', morse: '', char: ' ' });

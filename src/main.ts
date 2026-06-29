@@ -3,7 +3,6 @@ import { FaceLandmarkerEngine } from './lib/faceLandmarker';
 import { BlinkDetector, selfieEarHudPixels, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
-import { MouthOpenDetector, mouthOpenRatio } from './lib/mouthOpen';
 import {
   MorseStateMachine,
   DEFAULT_MORSE_TIMING,
@@ -49,7 +48,6 @@ let modelReady = false;
 let starting = false;
 const blinkDetector = new BlinkDetector();
 const headShakeDetector = new HeadShakeDetector();
-const mouthOpenDetector = new MouthOpenDetector();
 const morseAudio = new MorseAudio();
 let committedText = '';
 let pendingBuffer = '';
@@ -204,11 +202,11 @@ async function loop(): Promise<void> {
       positionEarLabels(frame.landmarks, eyes);
 
       const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
-      if (blink) {
-        morseAudio.play(blink.symbol);
-        morseMachine.onBlink(blink, now);
-      } else if (mouthOpenDetector.update(mouthOpenRatio(frame.landmarks), now)) {
-        morseMachine.onMouthSpace(now);
+      if (blink?.type === 'wink') {
+        morseAudio.play(blink.event.symbol);
+        morseMachine.onBlink(blink.event, now);
+      } else if (blink?.type === 'space') {
+        morseMachine.onSpace(now);
       } else if (headShakeDetector.update(noseOffsetX(frame.landmarks), now)) {
         backspaceOutput();
       }

@@ -171,19 +171,67 @@ type EyeState = {
   armed: boolean;
 };
 
+type BilateralState = {
+  prevLeft: number | null;
+  prevRight: number | null;
+  armed: boolean;
+};
+
+export type BlinkUpdateResult =
+  | { type: 'wink'; event: BlinkEvent }
+  | { type: 'space' };
+
 export class BlinkDetector {
   private left: EyeState = { prevEar: null, armed: true };
   private right: EyeState = { prevEar: null, armed: true };
+  private bilateral: BilateralState = { prevLeft: null, prevRight: null, armed: true };
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
-  /** Selfie L wink = dot, selfie R wink = dash. Other eye must stay open. */
-  update(leftEar: number, rightEar: number, now = performance.now()): BlinkEvent | null {
+  /** Selfie L wink = dot, selfie R wink = dash, both eyes blink = space. */
+  update(leftEar: number, rightEar: number, now = performance.now()): BlinkUpdateResult | null {
+    if (this.updateBilateral(leftEar, rightEar)) {
+      return { type: 'space' };
+    }
+
     const leftEvent = this.updateEye('left', leftEar, rightEar, this.left, now);
     const rightEvent = this.updateEye('right', rightEar, leftEar, this.right, now);
 
     if (leftEvent && rightEvent) return null;
-    return leftEvent ?? rightEvent;
+    const event = leftEvent ?? rightEvent;
+    return event ? { type: 'wink', event } : null;
+  }
+
+  private updateBilateral(leftEar: number, rightEar: number): boolean {
+    const { closedThreshold, rearmThreshold } = this.config;
+    const state = this.bilateral;
+
+    if (state.prevLeft === null || state.prevRight === null) {
+      state.prevLeft = leftEar;
+      state.prevRight = rightEar;
+      return false;
+    }
+
+    let fired = false;
+
+    if (
+      state.armed &&
+      state.prevLeft >= closedThreshold &&
+      state.prevRight >= closedThreshold &&
+      leftEar < closedThreshold &&
+      rightEar < closedThreshold
+    ) {
+      state.armed = false;
+      fired = true;
+    }
+
+    if (!state.armed && leftEar > rearmThreshold && rightEar > rearmThreshold) {
+      state.armed = true;
+    }
+
+    state.prevLeft = leftEar;
+    state.prevRight = rightEar;
+    return fired;
   }
 
   private otherEyeOpen(otherEar: number): boolean {
