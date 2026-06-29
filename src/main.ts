@@ -10,6 +10,7 @@ import {
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
 import { MorseAudio } from './lib/morseAudio';
+import { lettersOnly, segmentWords } from './lib/wordSegment';
 import pkg from '../package.json';
 import { versionLabel } from './buildRef';
 
@@ -53,7 +54,12 @@ let committedText = '';
 let pendingBuffer = '';
 
 function displayValue(): string {
-  return committedText + (pendingBuffer ? morseToDisplay(pendingBuffer) : '');
+  const spaced = committedText ? segmentWords(committedText) : '';
+  return spaced + (pendingBuffer ? morseToDisplay(pendingBuffer) : '');
+}
+
+function parseCommittedDisplay(display: string): string {
+  return lettersOnly(display);
 }
 
 function syncOutput(): void {
@@ -84,11 +90,11 @@ function onUserEdit(): void {
   const val = output.value;
 
   if (pendingDisplay && val.endsWith(pendingDisplay)) {
-    committedText = val.slice(0, -pendingDisplay.length);
+    committedText = parseCommittedDisplay(val.slice(0, -pendingDisplay.length));
     return;
   }
 
-  committedText = val;
+  committedText = parseCommittedDisplay(val);
   pendingBuffer = '';
   morseMachine.reset();
 }
@@ -96,8 +102,7 @@ function onUserEdit(): void {
 const morseMachine = new MorseStateMachine(
   DEFAULT_MORSE_TIMING,
   (event: MorseCommitEvent) => {
-    const text = event.type === 'space' ? ' ' : event.char;
-    committedText += text;
+    committedText += event.char.toLowerCase();
     pendingBuffer = '';
     syncOutput();
   },
@@ -202,11 +207,9 @@ async function loop(): Promise<void> {
       positionEarLabels(frame.landmarks, eyes);
 
       const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
-      if (blink?.type === 'wink') {
-        morseAudio.play(blink.event.symbol);
-        morseMachine.onBlink(blink.event, now);
-      } else if (blink?.type === 'space') {
-        morseMachine.onSpace(now);
+      if (blink) {
+        morseAudio.play(blink.symbol);
+        morseMachine.onBlink(blink, now);
       } else if (headShakeDetector.update(noseOffsetX(frame.landmarks), now)) {
         backspaceOutput();
       }
