@@ -1,6 +1,6 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector } from './lib/eyeBlink';
+import { BlinkDetector, eyeHudAnchor, minEar, averageEar } from './lib/eyeBlink';
 import {
   MorseStateMachine,
   DEFAULT_MORSE_TIMING,
@@ -19,32 +19,67 @@ app.innerHTML = `
     <main class="main">
       <div class="video-wrap">
         <video id="video" playsinline muted autoplay></video>
-        <div class="hud">
-          <div id="hud-ear" class="hud-line">EAR —</div>
-          <div id="hud-eye" class="hud-line">Eye —</div>
-        </div>
+        <div id="ear-label" class="ear-label" hidden>EAR —</div>
+        <div id="camera-error" class="camera-error" hidden></div>
       </div>
 
       <label class="field-label" for="output">Output text</label>
-      <textarea id="output" rows="6" placeholder="Blink to type Morse code…" spellcheck="false" readonly></textarea>
+      <textarea id="output" rows="6" placeholder="Blink to type Morse code…" spellcheck="false"></textarea>
     </main>
   </div>
 `;
 
 const video = document.querySelector<HTMLVideoElement>('#video')!;
 const output = document.querySelector<HTMLTextAreaElement>('#output')!;
-const hudEar = document.querySelector<HTMLDivElement>('#hud-ear')!;
-const hudEye = document.querySelector<HTMLDivElement>('#hud-eye')!;
+const earLabel = document.querySelector<HTMLDivElement>('#ear-label')!;
+const cameraError = document.querySelector<HTMLDivElement>('#camera-error')!;
 
 let stream: MediaStream | null = null;
 let rafId = 0;
 let engine: FaceLandmarkerEngine | null = null;
 const blinkDetector = new BlinkDetector();
 let committedText = '';
+let pendingBuffer = '';
 
-function renderOutput(pendingBuffer = ''): void {
-  output.value = committedText + (pendingBuffer ? morseToDisplay(pendingBuffer) : '');
+function displayValue(): string {
+  return committedText + (pendingBuffer ? morseToDisplay(pendingBuffer) : '');
+}
+
+function syncOutput(): void {
+  const next = displayValue();
+  if (output.value === next) return;
+
+  const selStart = output.selectionStart ?? next.length;
+  const selEnd = output.selectionEnd ?? next.length;
+  const hadFocus = document.activeElement === output;
+  const pendingDisplay = pendingBuffer ? morseToDisplay(pendingBuffer) : '';
+  const editingCommitted =
+    hadFocus && pendingDisplay && selEnd <= output.value.length - pendingDisplay.length;
+
+  output.value = next;
   output.scrollTop = output.scrollHeight;
+
+  if (hadFocus) {
+    if (editingCommitted) {
+      output.setSelectionRange(selStart, selEnd);
+    } else {
+      output.setSelectionRange(next.length, next.length);
+    }
+  }
+}
+
+function onUserEdit(): void {
+  const pendingDisplay = pendingBuffer ? morseToDisplay(pendingBuffer) : '';
+  const val = output.value;
+
+  if (pendingDisplay && val.endsWith(pendingDisplay)) {
+    committedText = val.slice(0, -pendingDisplay.length);
+    return;
+  }
+
+  committedText = val;
+  pendingBuffer = '';
+  morseMachine.reset();
 }
 
 const morseMachine = new MorseStateMachine(
@@ -55,12 +90,21 @@ const morseMachine = new MorseStateMachine(
     } else {
       committedText += event.char;
     }
-    renderOutput();
+    pendingBuffer = '';
+    syncOutput();
   },
   (buffer) => {
-    renderOutput(buffer);
+    pendingBuffer = buffer;
+    syncOutput();
   },
 );
+
+function positionEarLabel(landmarks: { x: number; y: number }[]): void {
+  const anchor = eyeHudAnchor(landmarks);
+  earLabel.style.left = `${(1 - anchor.x) * 100}%`;
+  earLabel.style.top = `${anchor.y * 100}%`;
+  earLabel.hidden = false;
+}
 
 async function loop(): Promise<void> {
   if (!engine || !stream) return;
@@ -68,18 +112,20 @@ async function loop(): Promise<void> {
   const frame = engine.detect(video, now);
 
   if (frame) {
-    const { ear } = frame;
-    const closed = blinkDetector.isClosed() || ear < blinkDetector.getConfig().closedThreshold;
+    const displayEar = averageEar(frame.landmarks);
+    const trackEar = minEar(frame.landmarks);
 
-    hudEar.textContent = `EAR ${ear.toFixed(3)}`;
-    hudEye.textContent = `Eye ${closed ? 'Closed' : 'Open'}`;
-    hudEye.classList.toggle('closed', closed);
+    earLabel.textContent = `EAR ${displayEar.toFixed(3)}`;
+    positionEarLabel(frame.landmarks);
 
-    const blink = blinkDetector.update(ear, now);
+    const blink = blinkDetector.update(trackEar, now);
     if (blink) {
       morseMachine.onBlink(blink, now);
     }
+  } else {
+    earLabel.hidden = true;
   }
+
   rafId = requestAnimationFrame(loop);
 }
 
@@ -93,15 +139,20 @@ async function startCamera(): Promise<void> {
     });
     video.srcObject = stream;
     await video.play();
+    cameraError.hidden = true;
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(loop);
   } catch (err) {
-    hudEye.textContent = err instanceof Error ? err.message : 'Camera error';
+    cameraError.textContent = err instanceof Error ? err.message : 'Camera error';
+    cameraError.hidden = false;
+    earLabel.hidden = true;
     stream?.getTracks().forEach((t) => t.stop());
     stream = null;
     engine?.close();
     engine = null;
   }
 }
+
+output.addEventListener('input', onUserEdit);
 
 void startCamera();

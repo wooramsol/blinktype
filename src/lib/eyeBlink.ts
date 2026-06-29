@@ -22,18 +22,38 @@ export function averageEar(landmarks: Point2D[]): number {
   return (eyeAspectRatio(landmarks, LEFT_EYE) + eyeAspectRatio(landmarks, RIGHT_EYE)) / 2;
 }
 
+export function minEar(landmarks: Point2D[]): number {
+  return Math.min(eyeAspectRatio(landmarks, LEFT_EYE), eyeAspectRatio(landmarks, RIGHT_EYE));
+}
+
+/** Normalized anchor above the eyes for HUD placement (mirrored display uses 1 - x). */
+export function eyeHudAnchor(landmarks: Point2D[]): Point2D {
+  const left = landmarks[33];
+  const right = landmarks[263];
+  return {
+    x: (left.x + right.x) / 2,
+    y: Math.min(left.y, right.y) - 0.04,
+  };
+}
+
 export interface BlinkDetectorConfig {
   closedThreshold: number;
   openThreshold: number;
   dotMaxMs: number;
   minBlinkMs: number;
+  closeRatio: number;
+  openRatio: number;
+  baselineAlpha: number;
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
-  closedThreshold: 0.21,
-  openThreshold: 0.24,
-  dotMaxMs: 280,
-  minBlinkMs: 80,
+  closedThreshold: 0.19,
+  openThreshold: 0.21,
+  dotMaxMs: 420,
+  minBlinkMs: 50,
+  closeRatio: 0.72,
+  openRatio: 0.88,
+  baselineAlpha: 0.08,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
@@ -46,17 +66,31 @@ export interface BlinkEvent {
 export class BlinkDetector {
   private eyesClosed = false;
   private closeStartedAt = 0;
+  private baselineEar = 0.28;
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
   update(ear: number, now = performance.now()): BlinkEvent | null {
-    if (!this.eyesClosed && ear < this.config.closedThreshold) {
+    if (!this.eyesClosed) {
+      this.baselineEar += this.config.baselineAlpha * (ear - this.baselineEar);
+    }
+
+    const closeAt = Math.min(
+      this.config.closedThreshold,
+      this.baselineEar * this.config.closeRatio,
+    );
+    const openAt = Math.max(
+      this.config.openThreshold,
+      this.baselineEar * this.config.openRatio,
+    );
+
+    if (!this.eyesClosed && ear < closeAt) {
       this.eyesClosed = true;
       this.closeStartedAt = now;
       return null;
     }
 
-    if (this.eyesClosed && ear > this.config.openThreshold) {
+    if (this.eyesClosed && ear > openAt) {
       this.eyesClosed = false;
       const durationMs = now - this.closeStartedAt;
       if (durationMs < this.config.minBlinkMs) return null;
@@ -67,10 +101,6 @@ export class BlinkDetector {
     }
 
     return null;
-  }
-
-  isClosed(): boolean {
-    return this.eyesClosed;
   }
 
   setConfig(config: Partial<BlinkDetectorConfig>): void {
