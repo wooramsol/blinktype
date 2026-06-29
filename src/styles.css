@@ -111,18 +111,23 @@ body {
   position: absolute;
   top: 8px;
   right: 8px;
+  left: 8px;
   z-index: 3;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 6px;
   pointer-events: auto;
 }
 
 .timing-control {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 4px 8px;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
+  width: min(148px, calc(50% - 3px));
+  padding: 6px 8px;
   background: rgba(0, 0, 0, 0.55);
   border: 1px solid #444;
   font: inherit;
@@ -131,13 +136,25 @@ body {
 }
 
 .timing-control input[type='range'] {
-  width: 88px;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  width: 100%;
   margin: 0;
   accent-color: #fff;
 }
 
 .timing-control label {
+  grid-column: 1;
+  grid-row: 1;
   white-space: nowrap;
+}
+
+.timing-control .timing-val {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 4ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 #output {

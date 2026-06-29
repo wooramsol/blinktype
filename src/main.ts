@@ -35,12 +35,12 @@ app.innerHTML = `
         <div class="timing-control">
           <label for="dot-max-ms">·/− ms</label>
           <input type="range" id="dot-max-ms" min="${DOT_MAX_MS_SLIDER_MIN}" max="${DOT_MAX_MS_SLIDER_MAX}" step="10" value="${MORSE_DOT_DASH_THRESHOLD_MS}" />
-          <span id="dot-max-ms-val">${MORSE_DOT_DASH_THRESHOLD_MS}</span>
+          <span id="dot-max-ms-val" class="timing-val">${MORSE_DOT_DASH_THRESHOLD_MS}</span>
         </div>
         <div class="timing-control">
           <label for="letter-gap-ms">letter ms</label>
           <input type="range" id="letter-gap-ms" min="${LETTER_GAP_MS_SLIDER_MIN}" max="${LETTER_GAP_MS_SLIDER_MAX}" step="${LETTER_GAP_MS_SLIDER_STEP}" value="${MORSE_LETTER_GAP_MS}" />
-          <span id="letter-gap-ms-val">${MORSE_LETTER_GAP_MS}</span>
+          <span id="letter-gap-ms-val" class="timing-val">${MORSE_LETTER_GAP_MS}</span>
         </div>
       </div>
       <div class="video-mirror">
