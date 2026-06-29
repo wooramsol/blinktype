@@ -54,6 +54,13 @@ export class MorseStateMachine {
     }
   }
 
+  /** Commit any in-progress letter immediately (e.g. before inserting a space). */
+  flush(): void {
+    if (!this.buffer) return;
+    this.letterDeadline = 0;
+    this.commitLetter();
+  }
+
   reset(): void {
     this.letterDeadline = 0;
     this.buffer = '';
