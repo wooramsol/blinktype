@@ -1,6 +1,6 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector, averageEar, selfieScreenEyes } from './lib/eyeBlink';
+import { BlinkDetector, averageEar, selfieEarHudPixels, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import {
@@ -75,7 +75,7 @@ app.innerHTML = `
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="overlay"></canvas>
       </div>
-      <div id="ear-label" class="ear-label mouth-hud" hidden>E —</div>
+      <div id="ear-label" class="ear-label ear-hud-left" hidden>E —</div>
     </div>
     <textarea id="output" rows="8" spellcheck="false"></textarea>
   </div>
@@ -285,9 +285,11 @@ function positionEarLabel(landmarks: { x: number; y: number }[]): void {
   if (w === 0 || h === 0) return;
 
   const ear = averageEar(landmarks);
+  const { screenLeft } = selfieEarHudPixels(landmarks, w, h);
+
   earLabel.textContent = `E ${ear.toFixed(3)}`;
-  earLabel.style.left = `${w * 0.5}px`;
-  earLabel.style.top = `${h * 0.88}px`;
+  earLabel.style.left = `${screenLeft.x}px`;
+  earLabel.style.top = `${screenLeft.y}px`;
   earLabel.hidden = false;
 }
 
