@@ -69,13 +69,11 @@ export function selfieScreenEyes(landmarks: Point2D[]): {
 }
 
 /** Normalized anchor (0–1), same space as the face overlay inside the mirror. */
-export function selfieEarLabelAnchors(
-  landmarks: Point2D[],
-  eyes = selfieScreenEyes(landmarks),
-): {
+export function selfieEarLabelAnchors(landmarks: Point2D[]): {
   screenLeft: Point2D;
   screenRight: Point2D;
 } {
+  const eyes = selfieScreenEyes(landmarks);
   const nose = landmarks[1];
   const pad = 0.055;
 
