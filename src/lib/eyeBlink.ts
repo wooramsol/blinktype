@@ -150,11 +150,16 @@ export interface BlinkDetectorConfig {
   closedThreshold: number;
   /** EAR must rise above this to arm the next wink (keep close to closed for fast re-arm). */
   rearmThreshold: number;
+  /** Max ms between two bilateral blinks to register a space. */
+  doubleBlinkWindowMs: number;
+  spaceCooldownMs: number;
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   closedThreshold: 0.23,
   rearmThreshold: 0.248,
+  doubleBlinkWindowMs: 750,
+  spaceCooldownMs: 500,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
@@ -171,19 +176,99 @@ type EyeState = {
   armed: boolean;
 };
 
+type BilateralState = {
+  prevLeft: number | null;
+  prevRight: number | null;
+  armed: boolean;
+  blinkCount: number;
+  firstBlinkAt: number;
+};
+
+export type BlinkUpdateResult =
+  | { type: 'wink'; event: BlinkEvent }
+  | { type: 'space' };
+
 export class BlinkDetector {
   private left: EyeState = { prevEar: null, armed: true };
   private right: EyeState = { prevEar: null, armed: true };
+  private bilateral: BilateralState = {
+    prevLeft: null,
+    prevRight: null,
+    armed: true,
+    blinkCount: 0,
+    firstBlinkAt: 0,
+  };
+  private lastSpaceAt = 0;
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
-  /** Selfie L wink = dot, selfie R wink = dash. Other eye must stay open. */
-  update(leftEar: number, rightEar: number, now = performance.now()): BlinkEvent | null {
+  /** Selfie L wink = dot, R wink = dash, both eyes blink twice = space. */
+  update(leftEar: number, rightEar: number, now = performance.now()): BlinkUpdateResult | null {
+    this.expireBilateralSequence(now);
+
+    if (this.updateBilateral(leftEar, rightEar, now)) {
+      return { type: 'space' };
+    }
+
     const leftEvent = this.updateEye('left', leftEar, rightEar, this.left, now);
     const rightEvent = this.updateEye('right', rightEar, leftEar, this.right, now);
 
     if (leftEvent && rightEvent) return null;
-    return leftEvent ?? rightEvent;
+    const event = leftEvent ?? rightEvent;
+    return event ? { type: 'wink', event } : null;
+  }
+
+  private expireBilateralSequence(now: number): void {
+    if (
+      this.bilateral.blinkCount === 1 &&
+      now - this.bilateral.firstBlinkAt > this.config.doubleBlinkWindowMs
+    ) {
+      this.bilateral.blinkCount = 0;
+    }
+  }
+
+  private updateBilateral(leftEar: number, rightEar: number, now: number): boolean {
+    const { closedThreshold, rearmThreshold } = this.config;
+    const state = this.bilateral;
+
+    if (state.prevLeft === null || state.prevRight === null) {
+      state.prevLeft = leftEar;
+      state.prevRight = rightEar;
+      return false;
+    }
+
+    let fired = false;
+
+    if (
+      state.armed &&
+      state.prevLeft >= closedThreshold &&
+      state.prevRight >= closedThreshold &&
+      leftEar < closedThreshold &&
+      rightEar < closedThreshold
+    ) {
+      state.armed = false;
+      if (state.blinkCount === 0) {
+        state.blinkCount = 1;
+        state.firstBlinkAt = now;
+      } else if (now - state.firstBlinkAt <= this.config.doubleBlinkWindowMs) {
+        if (now - this.lastSpaceAt >= this.config.spaceCooldownMs) {
+          state.blinkCount = 0;
+          this.lastSpaceAt = now;
+          fired = true;
+        }
+      } else {
+        state.blinkCount = 1;
+        state.firstBlinkAt = now;
+      }
+    }
+
+    if (!state.armed && leftEar > rearmThreshold && rightEar > rearmThreshold) {
+      state.armed = true;
+    }
+
+    state.prevLeft = leftEar;
+    state.prevRight = rightEar;
+    return fired;
   }
 
   private otherEyeOpen(otherEar: number): boolean {
