@@ -103,8 +103,8 @@ export interface BlinkDetectorConfig {
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   closedThreshold: 0.21,
-  openThreshold: 0.22,
-  minBlinkMs: 60,
+  openThreshold: 0.24,
+  minBlinkMs: 80,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
