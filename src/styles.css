@@ -4,7 +4,7 @@ body {
   margin: 0;
   min-height: 100vh;
   background: #0a0a0a;
-  color: #ccc;
+  color: #fff;
   font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -27,11 +27,11 @@ body {
   margin: 0;
   font: inherit;
   font-weight: normal;
-  color: #ccc;
+  color: #fff;
 }
 
 .credit {
-  color: #888;
+  color: #fff;
   white-space: nowrap;
 }
 
@@ -67,7 +67,7 @@ body {
 
 .ear-label {
   position: absolute;
-  color: #aaa;
+  color: #fff;
   font: inherit;
   pointer-events: none;
   z-index: 2;
@@ -81,7 +81,8 @@ body {
   padding: 8px;
   border: 1px solid #333;
   background: #0a0a0a;
-  color: #ccc;
+  color: #fff;
+  caret-color: #fff;
   font: inherit;
   font-size: 3em;
   line-height: 1.3;

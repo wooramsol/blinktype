@@ -1,6 +1,6 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector, faceSideHudAnchor, selfieEyeEars } from './lib/eyeBlink';
+import { BlinkDetector, rightEyeEarHudAnchor, selfieEyeEars } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import {
@@ -113,12 +113,11 @@ function backspaceOutput(): void {
 }
 
 function positionEarLabel(landmarks: { x: number; y: number }[]): void {
-  const anchor = faceSideHudAnchor(landmarks);
+  const anchor = rightEyeEarHudAnchor(landmarks);
   const screenX = 1 - anchor.x;
   earLabel.style.left = `${screenX * 100}%`;
   earLabel.style.top = `${anchor.y * 100}%`;
-  earLabel.style.transform =
-    screenX < 0.5 ? 'translate(-100%, -50%)' : 'translate(8px, -50%)';
+  earLabel.style.transform = 'translate(8px, -50%)';
   earLabel.hidden = false;
 }
 

@@ -30,18 +30,15 @@ export function selfieEyeEars(landmarks: Point2D[]): { left: number; right: numb
   };
 }
 
-/** Normalized anchor beside the face for HUD placement (mirrored display uses 1 - x). */
-export function faceSideHudAnchor(landmarks: Point2D[]): Point2D {
-  const nose = landmarks[1];
-  const leftCheek = landmarks[234];
-  const rightCheek = landmarks[454];
-  const useLeft =
-    Math.abs(leftCheek.x - nose.x) >= Math.abs(rightCheek.x - nose.x);
-  const cheek = useLeft ? leftCheek : rightCheek;
-  const outward = cheek.x < nose.x ? -0.06 : 0.06;
+/** Anchor beside the selfie screen-right eye for EAR HUD (mirrored display uses 1 - x). */
+export function rightEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
+  const outer = landmarks[263];
+  const y =
+    (landmarks[385].y + landmarks[387].y + landmarks[373].y + landmarks[380].y) / 4;
+  const outward = -0.035;
   return {
-    x: cheek.x + outward,
-    y: cheek.y,
+    x: outer.x + outward,
+    y,
   };
 }
 
