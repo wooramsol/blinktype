@@ -23,8 +23,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Resolve build ref
+        id: build_ref
+        run: |
+          PR=$(git log -1 --pretty=%B | grep -oE 'Merge pull request #[0-9]+' | grep -oE '[0-9]+' | head -1)
+          if [ -n "$PR" ]; then
+            echo "ref=pr#${PR}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=r${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          fi
       - run: npm ci
       - run: npm run build
+        env:
+          GITHUB_ACTIONS: true
+          VITE_BUILD_REF: ${{ steps.build_ref.outputs.ref }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
