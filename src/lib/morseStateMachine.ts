@@ -1,5 +1,6 @@
 import { decodeMorse } from './morse';
-import type { BlinkEvent } from './eyeBlink';
+
+export type MorseSymbol = 'dot' | 'dash';
 
 export interface MorseTimingConfig {
   letterGapMs: number;
@@ -26,8 +27,8 @@ export class MorseStateMachine {
     private onBufferChange: (buffer: string) => void,
   ) {}
 
-  onBlink(event: BlinkEvent, now = performance.now()): void {
-    this.buffer += event.symbol === 'dot' ? '.' : '-';
+  onMorseSymbol(symbol: MorseSymbol, now = performance.now()): void {
+    this.buffer += symbol === 'dot' ? '.' : '-';
     this.onBufferChange(this.buffer);
     this.letterDeadline = now + this.timing.letterGapMs;
   }
