@@ -68,31 +68,6 @@ body {
 
 #hud-eye.closed { color: var(--danger); }
 
-.camera-controls {
-  position: absolute;
-  right: 0.5rem;
-  bottom: 0.5rem;
-  display: flex;
-  gap: 0.4rem;
-  z-index: 2;
-}
-
-.btn {
-  border: 1px solid var(--border);
-  background: rgba(26, 35, 64, 0.85);
-  color: var(--text);
-  border-radius: 8px;
-  padding: 0.4rem 0.7rem;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.85rem;
-  backdrop-filter: blur(4px);
-}
-
-.btn:hover:not(:disabled) { border-color: var(--accent); }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
-
 .field-label {
   display: block;
   font-size: 0.9rem;
