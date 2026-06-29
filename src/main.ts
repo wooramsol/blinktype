@@ -125,7 +125,7 @@ function positionEarLabel(
   el.style.left = `${screenX * 100}%`;
   el.style.top = `${anchor.y * 100}%`;
   el.style.transform =
-    side === 'left' ? 'translate(calc(-100% - 6px), -50%)' : 'translate(6px, -50%)';
+    side === 'left' ? 'translate(6px, -50%)' : 'translate(calc(-100% - 6px), -50%)';
   el.hidden = false;
 }
 

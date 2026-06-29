@@ -34,11 +34,11 @@ export function selfieEyeEars(landmarks: Point2D[]): { left: number; right: numb
 export function leftEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
   const y =
     (landmarks[160].y + landmarks[158].y + landmarks[153].y + landmarks[144].y) / 4;
-  const leftCheek = landmarks[234];
-  const rightCheek = landmarks[454];
-  const faceWidth = Math.abs(rightCheek.x - leftCheek.x) || 1;
+  const xMin = Math.min(landmarks[234].x, landmarks[454].x);
+  const xMax = Math.max(landmarks[234].x, landmarks[454].x);
+  const faceWidth = xMax - xMin || 1;
   return {
-    x: leftCheek.x + faceWidth * 0.28,
+    x: xMax + faceWidth * 0.28,
     y,
   };
 }
@@ -47,11 +47,11 @@ export function leftEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
 export function rightEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
   const y =
     (landmarks[385].y + landmarks[387].y + landmarks[373].y + landmarks[380].y) / 4;
-  const leftCheek = landmarks[234];
-  const rightCheek = landmarks[454];
-  const faceWidth = Math.abs(rightCheek.x - leftCheek.x) || 1;
+  const xMin = Math.min(landmarks[234].x, landmarks[454].x);
+  const xMax = Math.max(landmarks[234].x, landmarks[454].x);
+  const faceWidth = xMax - xMin || 1;
   return {
-    x: rightCheek.x - faceWidth * 0.28,
+    x: xMin - faceWidth * 0.28,
     y,
   };
 }
