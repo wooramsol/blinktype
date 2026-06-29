@@ -35,7 +35,7 @@ export const COOLDOWN_MS_SLIDER_STEP = 10;
 
 /** EAR below this counts as eye closed (×1000 for slider). */
 export const EAR_CLOSED_DEFAULT = 240;
-export const EAR_CLOSED_SLIDER_MIN = 150;
+export const EAR_CLOSED_SLIDER_MIN = 0;
 export const EAR_CLOSED_SLIDER_MAX = 300;
 export const EAR_CLOSED_SLIDER_STEP = 2;
 export const EAR_REARM_DELTA = 0.006;

@@ -65,7 +65,7 @@ app.innerHTML = `
           <input type="range" id="min-blink-ms" min="${MIN_BLINK_MS_SLIDER_MIN}" max="${MIN_BLINK_MS_SLIDER_MAX}" step="${MIN_BLINK_MS_SLIDER_STEP}" value="${MIN_BLINK_MS_DEFAULT}" />
           <span id="min-blink-ms-val" class="timing-val">${MIN_BLINK_MS_DEFAULT}</span>
         </div>
-        <div class="timing-control timing-control-wide">
+        <div class="timing-control">
           <label for="ear-closed">EAR</label>
           <input type="range" id="ear-closed" min="${EAR_CLOSED_SLIDER_MIN}" max="${EAR_CLOSED_SLIDER_MAX}" step="${EAR_CLOSED_SLIDER_STEP}" value="${EAR_CLOSED_DEFAULT}" />
           <span id="ear-closed-val" class="timing-val">${EAR_CLOSED_DEFAULT}</span>
