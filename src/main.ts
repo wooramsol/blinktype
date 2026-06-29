@@ -1,6 +1,6 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector, averageEar, selfieScreenEyes } from './lib/eyeBlink';
+import { BlinkDetector, DEFAULT_BLINK_CONFIG, averageEar, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import {
@@ -23,6 +23,11 @@ app.innerHTML = `
       <span class="credit">@wooramsol</span>
     </div>
     <div id="video-wrap" class="video-wrap">
+      <div class="blink-threshold" id="blink-threshold">
+        <label for="dot-max-ms">·/− ms</label>
+        <input type="range" id="dot-max-ms" min="80" max="450" step="10" value="220" />
+        <span id="dot-max-ms-val">220</span>
+      </div>
       <div class="video-mirror">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="overlay"></canvas>
@@ -39,13 +44,27 @@ const overlay = document.querySelector<HTMLCanvasElement>('#overlay')!;
 const overlayCtx = overlay.getContext('2d')!;
 const output = document.querySelector<HTMLTextAreaElement>('#output')!;
 const earLabel = document.querySelector<HTMLDivElement>('#ear-label')!;
+const dotMaxMsInput = document.querySelector<HTMLInputElement>('#dot-max-ms')!;
+const dotMaxMsVal = document.querySelector<HTMLSpanElement>('#dot-max-ms-val')!;
 
 let stream: MediaStream | null = null;
 let rafId = 0;
 let engine: FaceLandmarkerEngine | null = null;
 let modelReady = false;
 let starting = false;
+
+const DOT_MAX_MS_KEY = 'blinktype-dotMaxMs';
+const savedDotMaxMs = Number(localStorage.getItem(DOT_MAX_MS_KEY));
+const initialDotMaxMs =
+  Number.isFinite(savedDotMaxMs) && savedDotMaxMs >= 80 && savedDotMaxMs <= 450
+    ? savedDotMaxMs
+    : DEFAULT_BLINK_CONFIG.dotMaxMs;
+
+dotMaxMsInput.value = String(initialDotMaxMs);
+dotMaxMsVal.textContent = String(initialDotMaxMs);
+
 const blinkDetector = new BlinkDetector();
+blinkDetector.setConfig({ dotMaxMs: initialDotMaxMs });
 const headShakeDetector = new HeadShakeDetector();
 const morseAudio = new MorseAudio();
 let committedText = '';
@@ -135,6 +154,16 @@ function positionEarLabel(landmarks: { x: number; y: number }[]): void {
 function hideEarLabel(): void {
   earLabel.hidden = true;
 }
+
+function syncDotMaxMs(ms: number): void {
+  dotMaxMsVal.textContent = String(ms);
+  blinkDetector.setConfig({ dotMaxMs: ms });
+  localStorage.setItem(DOT_MAX_MS_KEY, String(ms));
+}
+
+dotMaxMsInput.addEventListener('input', () => {
+  syncDotMaxMs(Number(dotMaxMsInput.value));
+});
 
 function isVideoLive(): boolean {
   return stream !== null && video.videoWidth > 0 && !video.paused;
