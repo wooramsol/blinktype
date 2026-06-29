@@ -154,7 +154,7 @@ export interface BlinkDetectorConfig {
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   closedThreshold: 0.23,
-  rearmThreshold: 0.245,
+  rearmThreshold: 0.255,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
@@ -167,13 +167,13 @@ export interface BlinkEvent {
 }
 
 type EyeState = {
+  prevEar: number | null;
   armed: boolean;
-  disarmedAt: number;
 };
 
 export class BlinkDetector {
-  private left: EyeState = { armed: true, disarmedAt: 0 };
-  private right: EyeState = { armed: true, disarmedAt: 0 };
+  private left: EyeState = { prevEar: null, armed: true };
+  private right: EyeState = { prevEar: null, armed: true };
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
@@ -195,16 +195,23 @@ export class BlinkDetector {
     ear: number,
     otherEar: number,
     state: EyeState,
-    now: number,
+    _now: number,
   ): BlinkEvent | null {
-    if (!state.armed && now - state.disarmedAt > 180) {
-      state.armed = true;
+    if (state.prevEar === null) {
+      state.prevEar = ear;
+      return null;
     }
 
-    if (state.armed && ear < this.config.closedThreshold && this.otherEyeOpen(otherEar)) {
+    let event: BlinkEvent | null = null;
+
+    if (
+      state.armed &&
+      state.prevEar >= this.config.closedThreshold &&
+      ear < this.config.closedThreshold &&
+      this.otherEyeOpen(otherEar)
+    ) {
       state.armed = false;
-      state.disarmedAt = now;
-      return {
+      event = {
         symbol: eye === 'left' ? 'dot' : 'dash',
         eye,
         durationMs: 0,
@@ -215,7 +222,8 @@ export class BlinkDetector {
       state.armed = true;
     }
 
-    return null;
+    state.prevEar = ear;
+    return event;
   }
 
   setConfig(config: Partial<BlinkDetectorConfig>): void {
