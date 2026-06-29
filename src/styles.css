@@ -97,9 +97,9 @@ body {
   transform: translate(-100%, -50%);
 }
 
-/* Mouth open ratio HUD below preview center. */
-.mouth-hud {
-  transform: translate(-50%, -50%);
+/* Selfie R: anchor at outer canthus, text extends further right. */
+.ear-hud-right {
+  transform: translate(8px, -50%);
 }
 
 #output {

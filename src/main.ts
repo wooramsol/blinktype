@@ -1,8 +1,8 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
+import { BlinkDetector, selfieEarHudPixels, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
-import { MouthMorseDetector, mouthOpenRatio } from './lib/mouthOpen';
 import {
   MorseStateMachine,
   DEFAULT_MORSE_TIMING,
@@ -27,7 +27,8 @@ app.innerHTML = `
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="overlay"></canvas>
       </div>
-      <div id="mouth-label" class="ear-label mouth-hud" hidden>M —</div>
+      <div id="ear-label-left" class="ear-label ear-hud-left" hidden>L —</div>
+      <div id="ear-label-right" class="ear-label ear-hud-right" hidden>R —</div>
     </div>
     <textarea id="output" rows="8" spellcheck="false"></textarea>
   </div>
@@ -38,14 +39,15 @@ const video = document.querySelector<HTMLVideoElement>('#video')!;
 const overlay = document.querySelector<HTMLCanvasElement>('#overlay')!;
 const overlayCtx = overlay.getContext('2d')!;
 const output = document.querySelector<HTMLTextAreaElement>('#output')!;
-const mouthLabel = document.querySelector<HTMLDivElement>('#mouth-label')!;
+const earLabelLeft = document.querySelector<HTMLDivElement>('#ear-label-left')!;
+const earLabelRight = document.querySelector<HTMLDivElement>('#ear-label-right')!;
 
 let stream: MediaStream | null = null;
 let rafId = 0;
 let engine: FaceLandmarkerEngine | null = null;
 let modelReady = false;
 let starting = false;
-const mouthMorseDetector = new MouthMorseDetector();
+const blinkDetector = new BlinkDetector();
 const headShakeDetector = new HeadShakeDetector();
 const morseAudio = new MorseAudio();
 let committedText = '';
@@ -120,19 +122,30 @@ function backspaceOutput(): void {
   syncOutput();
 }
 
-function positionMouthLabel(ratio: number): void {
+function positionEarLabels(
+  landmarks: { x: number; y: number }[],
+  eyes: ReturnType<typeof selfieScreenEyes>,
+): void {
   const w = videoWrap.clientWidth;
   const h = videoWrap.clientHeight;
   if (w === 0 || h === 0) return;
 
-  mouthLabel.textContent = `M ${ratio.toFixed(3)}`;
-  mouthLabel.style.left = `${w * 0.5}px`;
-  mouthLabel.style.top = `${h * 0.88}px`;
-  mouthLabel.hidden = false;
+  const { screenLeft, screenRight } = selfieEarHudPixels(landmarks, w, h, eyes);
+
+  earLabelLeft.textContent = `L ${eyes.screenLeft.ear.toFixed(3)}`;
+  earLabelLeft.style.left = `${screenLeft.x}px`;
+  earLabelLeft.style.top = `${screenLeft.y}px`;
+  earLabelLeft.hidden = false;
+
+  earLabelRight.textContent = `R ${eyes.screenRight.ear.toFixed(3)}`;
+  earLabelRight.style.left = `${screenRight.x}px`;
+  earLabelRight.style.top = `${screenRight.y}px`;
+  earLabelRight.hidden = false;
 }
 
-function hideMouthLabel(): void {
-  mouthLabel.hidden = true;
+function hideEarLabels(): void {
+  earLabelLeft.hidden = true;
+  earLabelRight.hidden = true;
 }
 
 function isVideoLive(): boolean {
@@ -190,18 +203,18 @@ async function loop(): Promise<void> {
       resizeOverlayCanvas(overlay, video);
       drawFaceOverlay(overlayCtx, frame.landmarks);
 
-      const ratio = mouthOpenRatio(frame.landmarks);
-      positionMouthLabel(ratio);
+      const eyes = selfieScreenEyes(frame.landmarks);
+      positionEarLabels(frame.landmarks, eyes);
 
-      const mouth = mouthMorseDetector.update(ratio, now);
-      if (mouth) {
-        morseAudio.play(mouth.symbol);
-        morseMachine.onMorseSymbol(mouth.symbol, now);
+      const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
+      if (blink) {
+        morseAudio.play(blink.symbol);
+        morseMachine.onBlink(blink, now);
       } else if (headShakeDetector.update(noseOffsetX(frame.landmarks), now)) {
         backspaceOutput();
       }
     } else {
-      hideMouthLabel();
+      hideEarLabels();
       clearFaceOverlay(overlayCtx);
     }
 
