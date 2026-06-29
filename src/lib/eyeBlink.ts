@@ -1,6 +1,9 @@
 import {
   MORSE_DOT_DASH_THRESHOLD_MS,
-  MORSE_UNIT_MS,
+  MIN_BLINK_MS_DEFAULT,
+  COOLDOWN_MS_DEFAULT,
+  EAR_CLOSED_DEFAULT,
+  EAR_REARM_DELTA,
 } from './morseTiming';
 
 const LEFT_EYE = [33, 160, 158, 133, 153, 144] as const;
@@ -161,11 +164,11 @@ export interface BlinkDetectorConfig {
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
-  closedThreshold: 0.24,
-  rearmThreshold: 0.246,
-  minBlinkMs: Math.round(MORSE_UNIT_MS * 0.55),
+  closedThreshold: EAR_CLOSED_DEFAULT / 1000,
+  rearmThreshold: EAR_CLOSED_DEFAULT / 1000 + EAR_REARM_DELTA,
+  minBlinkMs: MIN_BLINK_MS_DEFAULT,
   dotMaxMs: MORSE_DOT_DASH_THRESHOLD_MS,
-  cooldownMs: 100,
+  cooldownMs: COOLDOWN_MS_DEFAULT,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';

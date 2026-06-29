@@ -10,11 +10,24 @@ import {
 } from './lib/morseStateMachine';
 import { MorseAudio } from './lib/morseAudio';
 import {
+  COOLDOWN_MS_DEFAULT,
+  COOLDOWN_MS_SLIDER_MAX,
+  COOLDOWN_MS_SLIDER_MIN,
+  COOLDOWN_MS_SLIDER_STEP,
   DOT_MAX_MS_SLIDER_MAX,
   DOT_MAX_MS_SLIDER_MIN,
+  EAR_CLOSED_DEFAULT,
+  EAR_CLOSED_SLIDER_MAX,
+  EAR_CLOSED_SLIDER_MIN,
+  EAR_CLOSED_SLIDER_STEP,
+  EAR_REARM_DELTA,
   LETTER_GAP_MS_SLIDER_MAX,
   LETTER_GAP_MS_SLIDER_MIN,
   LETTER_GAP_MS_SLIDER_STEP,
+  MIN_BLINK_MS_DEFAULT,
+  MIN_BLINK_MS_SLIDER_MAX,
+  MIN_BLINK_MS_SLIDER_MIN,
+  MIN_BLINK_MS_SLIDER_STEP,
   MORSE_DOT_DASH_THRESHOLD_MS,
   MORSE_LETTER_GAP_MS,
 } from './lib/morseTiming';
@@ -42,6 +55,21 @@ app.innerHTML = `
           <input type="range" id="letter-gap-ms" min="${LETTER_GAP_MS_SLIDER_MIN}" max="${LETTER_GAP_MS_SLIDER_MAX}" step="${LETTER_GAP_MS_SLIDER_STEP}" value="${MORSE_LETTER_GAP_MS}" />
           <span id="letter-gap-ms-val" class="timing-val">${MORSE_LETTER_GAP_MS}</span>
         </div>
+        <div class="timing-control">
+          <label for="cooldown-ms">gap ms</label>
+          <input type="range" id="cooldown-ms" min="${COOLDOWN_MS_SLIDER_MIN}" max="${COOLDOWN_MS_SLIDER_MAX}" step="${COOLDOWN_MS_SLIDER_STEP}" value="${COOLDOWN_MS_DEFAULT}" />
+          <span id="cooldown-ms-val" class="timing-val">${COOLDOWN_MS_DEFAULT}</span>
+        </div>
+        <div class="timing-control">
+          <label for="min-blink-ms">min ms</label>
+          <input type="range" id="min-blink-ms" min="${MIN_BLINK_MS_SLIDER_MIN}" max="${MIN_BLINK_MS_SLIDER_MAX}" step="${MIN_BLINK_MS_SLIDER_STEP}" value="${MIN_BLINK_MS_DEFAULT}" />
+          <span id="min-blink-ms-val" class="timing-val">${MIN_BLINK_MS_DEFAULT}</span>
+        </div>
+        <div class="timing-control timing-control-wide">
+          <label for="ear-closed">EAR</label>
+          <input type="range" id="ear-closed" min="${EAR_CLOSED_SLIDER_MIN}" max="${EAR_CLOSED_SLIDER_MAX}" step="${EAR_CLOSED_SLIDER_STEP}" value="${EAR_CLOSED_DEFAULT}" />
+          <span id="ear-closed-val" class="timing-val">${EAR_CLOSED_DEFAULT}</span>
+        </div>
       </div>
       <div class="video-mirror">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
@@ -63,6 +91,44 @@ const dotMaxMsInput = document.querySelector<HTMLInputElement>('#dot-max-ms')!;
 const dotMaxMsVal = document.querySelector<HTMLSpanElement>('#dot-max-ms-val')!;
 const letterGapMsInput = document.querySelector<HTMLInputElement>('#letter-gap-ms')!;
 const letterGapMsVal = document.querySelector<HTMLSpanElement>('#letter-gap-ms-val')!;
+const cooldownMsInput = document.querySelector<HTMLInputElement>('#cooldown-ms')!;
+const cooldownMsVal = document.querySelector<HTMLSpanElement>('#cooldown-ms-val')!;
+const minBlinkMsInput = document.querySelector<HTMLInputElement>('#min-blink-ms')!;
+const minBlinkMsVal = document.querySelector<HTMLSpanElement>('#min-blink-ms-val')!;
+const earClosedInput = document.querySelector<HTMLInputElement>('#ear-closed')!;
+const earClosedVal = document.querySelector<HTMLSpanElement>('#ear-closed-val')!;
+
+function loadSavedMs(
+  key: string,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  const saved = Number(localStorage.getItem(key));
+  return Number.isFinite(saved) && saved >= min && saved <= max ? saved : fallback;
+}
+
+function bindMsSlider(
+  input: HTMLInputElement,
+  valEl: HTMLSpanElement,
+  key: string,
+  min: number,
+  max: number,
+  fallback: number,
+  onChange: (ms: number) => void,
+): number {
+  const initial = loadSavedMs(key, min, max, fallback);
+  input.value = String(initial);
+  valEl.textContent = String(initial);
+  onChange(initial);
+  input.addEventListener('input', () => {
+    const ms = Number(input.value);
+    valEl.textContent = String(ms);
+    onChange(ms);
+    localStorage.setItem(key, String(ms));
+  });
+  return initial;
+}
 
 let stream: MediaStream | null = null;
 let rafId = 0;
@@ -71,31 +137,64 @@ let modelReady = false;
 let starting = false;
 
 const DOT_MAX_MS_KEY = 'blinktype-dotMaxMs';
-const savedDotMaxMs = Number(localStorage.getItem(DOT_MAX_MS_KEY));
-const initialDotMaxMs =
-  Number.isFinite(savedDotMaxMs) &&
-  savedDotMaxMs >= DOT_MAX_MS_SLIDER_MIN &&
-  savedDotMaxMs <= DOT_MAX_MS_SLIDER_MAX
-    ? savedDotMaxMs
-    : MORSE_DOT_DASH_THRESHOLD_MS;
-
-dotMaxMsInput.value = String(initialDotMaxMs);
-dotMaxMsVal.textContent = String(initialDotMaxMs);
-
 const LETTER_GAP_MS_KEY = 'blinktype-letterGapMs';
-const savedLetterGapMs = Number(localStorage.getItem(LETTER_GAP_MS_KEY));
-const initialLetterGapMs =
-  Number.isFinite(savedLetterGapMs) &&
-  savedLetterGapMs >= LETTER_GAP_MS_SLIDER_MIN &&
-  savedLetterGapMs <= LETTER_GAP_MS_SLIDER_MAX
-    ? savedLetterGapMs
-    : MORSE_LETTER_GAP_MS;
-
-letterGapMsInput.value = String(initialLetterGapMs);
-letterGapMsVal.textContent = String(initialLetterGapMs);
+const COOLDOWN_MS_KEY = 'blinktype-cooldownMs';
+const MIN_BLINK_MS_KEY = 'blinktype-minBlinkMs';
+const EAR_CLOSED_KEY = 'blinktype-earClosed';
 
 const blinkDetector = new BlinkDetector();
-blinkDetector.setConfig({ dotMaxMs: initialDotMaxMs });
+bindMsSlider(
+  dotMaxMsInput,
+  dotMaxMsVal,
+  DOT_MAX_MS_KEY,
+  DOT_MAX_MS_SLIDER_MIN,
+  DOT_MAX_MS_SLIDER_MAX,
+  MORSE_DOT_DASH_THRESHOLD_MS,
+  (ms) => blinkDetector.setConfig({ dotMaxMs: ms }),
+);
+
+const initialLetterGapMs = loadSavedMs(
+  LETTER_GAP_MS_KEY,
+  LETTER_GAP_MS_SLIDER_MIN,
+  LETTER_GAP_MS_SLIDER_MAX,
+  MORSE_LETTER_GAP_MS,
+);
+
+bindMsSlider(
+  cooldownMsInput,
+  cooldownMsVal,
+  COOLDOWN_MS_KEY,
+  COOLDOWN_MS_SLIDER_MIN,
+  COOLDOWN_MS_SLIDER_MAX,
+  COOLDOWN_MS_DEFAULT,
+  (ms) => blinkDetector.setConfig({ cooldownMs: ms }),
+);
+
+bindMsSlider(
+  minBlinkMsInput,
+  minBlinkMsVal,
+  MIN_BLINK_MS_KEY,
+  MIN_BLINK_MS_SLIDER_MIN,
+  MIN_BLINK_MS_SLIDER_MAX,
+  MIN_BLINK_MS_DEFAULT,
+  (ms) => blinkDetector.setConfig({ minBlinkMs: ms }),
+);
+
+bindMsSlider(
+  earClosedInput,
+  earClosedVal,
+  EAR_CLOSED_KEY,
+  EAR_CLOSED_SLIDER_MIN,
+  EAR_CLOSED_SLIDER_MAX,
+  EAR_CLOSED_DEFAULT,
+  (v) => {
+    const closed = v / 1000;
+    blinkDetector.setConfig({
+      closedThreshold: closed,
+      rearmThreshold: closed + EAR_REARM_DELTA,
+    });
+  },
+);
 const headShakeDetector = new HeadShakeDetector();
 const morseAudio = new MorseAudio();
 let committedText = '';
@@ -160,6 +259,16 @@ const morseMachine = new MorseStateMachine(
   },
 );
 
+bindMsSlider(
+  letterGapMsInput,
+  letterGapMsVal,
+  LETTER_GAP_MS_KEY,
+  LETTER_GAP_MS_SLIDER_MIN,
+  LETTER_GAP_MS_SLIDER_MAX,
+  MORSE_LETTER_GAP_MS,
+  (ms) => morseMachine.setTiming({ letterGapMs: ms }),
+);
+
 function backspaceOutput(): void {
   if (pendingBuffer) {
     pendingBuffer = '';
@@ -185,26 +294,6 @@ function positionEarLabel(landmarks: { x: number; y: number }[]): void {
 function hideEarLabel(): void {
   earLabel.hidden = true;
 }
-
-function syncDotMaxMs(ms: number): void {
-  dotMaxMsVal.textContent = String(ms);
-  blinkDetector.setConfig({ dotMaxMs: ms });
-  localStorage.setItem(DOT_MAX_MS_KEY, String(ms));
-}
-
-dotMaxMsInput.addEventListener('input', () => {
-  syncDotMaxMs(Number(dotMaxMsInput.value));
-});
-
-function syncLetterGapMs(ms: number): void {
-  letterGapMsVal.textContent = String(ms);
-  morseMachine.setTiming({ letterGapMs: ms });
-  localStorage.setItem(LETTER_GAP_MS_KEY, String(ms));
-}
-
-letterGapMsInput.addEventListener('input', () => {
-  syncLetterGapMs(Number(letterGapMsInput.value));
-});
 
 function isVideoLive(): boolean {
   return stream !== null && video.videoWidth > 0 && !video.paused;
