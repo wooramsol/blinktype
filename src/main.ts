@@ -13,22 +13,14 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 
 app.innerHTML = `
   <div class="layout">
-    <header class="header">
-      <h1>Blinktype</h1>
-    </header>
-
-    <main class="main">
-      <div id="video-wrap" class="video-wrap">
-        <div class="video-mirror">
-          <video id="video" autoplay muted playsinline webkit-playsinline></video>
-          <canvas id="overlay"></canvas>
-        </div>
-        <div id="ear-label" class="ear-label" hidden>EAR —</div>
+    <div id="video-wrap" class="video-wrap">
+      <div class="video-mirror">
+        <video id="video" autoplay muted playsinline webkit-playsinline></video>
+        <canvas id="overlay"></canvas>
       </div>
-
-      <label class="field-label" for="output">Output text</label>
-      <textarea id="output" rows="6" placeholder="Blink to type Morse code…" spellcheck="false"></textarea>
-    </main>
+      <div id="ear-label" class="ear-label" hidden>EAR —</div>
+    </div>
+    <textarea id="output" rows="8" spellcheck="false"></textarea>
   </div>
 `;
 

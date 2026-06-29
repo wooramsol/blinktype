@@ -1,8 +1,8 @@
 import { FaceLandmarker } from '@mediapipe/tasks-vision';
 import type { Point2D } from './eyeBlink';
 
-const LEFT_EYE = new Set([33, 160, 158, 133, 153, 144]);
-const RIGHT_EYE = new Set([362, 385, 387, 263, 373, 380]);
+const LEFT_EYE = [33, 160, 158, 133, 153, 144];
+const RIGHT_EYE = [362, 385, 387, 263, 373, 380];
 
 type Connection = { start: number; end: number };
 
@@ -31,18 +31,10 @@ export function drawFaceOverlay(
     ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
   ];
 
-  drawConnections(ctx, landmarks, contours, w, h, 'rgba(91, 140, 255, 0.75)', 1.25);
+  drawConnections(ctx, landmarks, contours, w, h, '#aaa', 1);
 
-  for (let i = 0; i < landmarks.length; i++) {
-    const isEye = LEFT_EYE.has(i) || RIGHT_EYE.has(i);
-    drawPoint(
-      ctx,
-      landmarks[i],
-      w,
-      h,
-      isEye ? 'rgba(250, 204, 21, 0.95)' : 'rgba(91, 140, 255, 0.45)',
-      isEye ? 2.5 : 1.25,
-    );
+  for (const i of [...LEFT_EYE, ...RIGHT_EYE]) {
+    drawPoint(ctx, landmarks[i], w, h, '#fff', 2);
   }
 }
 
