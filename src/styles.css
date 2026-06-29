@@ -41,7 +41,13 @@ body {
   border: 1px solid var(--border);
   aspect-ratio: 4 / 3;
   cursor: pointer;
-  background: #111827;
+  background: var(--panel);
+}
+
+.video-mirror {
+  position: absolute;
+  inset: 0;
+  transform: scaleX(-1);
 }
 
 #video {
@@ -49,9 +55,7 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scaleX(-1);
-  filter: none;
-  opacity: 1;
+  background: #000;
 }
 
 .ear-label {
@@ -72,9 +76,10 @@ body {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: transparent;
+  background: rgba(11, 16, 32, 0.72);
   color: var(--text);
   font-size: 0.95rem;
+  font-weight: 600;
   text-align: center;
   cursor: pointer;
   z-index: 3;
@@ -82,16 +87,15 @@ body {
 
 .camera-error {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: var(--panel);
-  color: var(--muted);
-  font-size: 0.9rem;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.5rem 0.75rem;
+  background: rgba(20, 27, 47, 0.92);
+  color: #fca5a5;
+  font-size: 0.8rem;
   text-align: center;
-  z-index: 3;
+  z-index: 4;
 }
 
 .field-label {

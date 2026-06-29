@@ -18,9 +18,11 @@ app.innerHTML = `
 
     <main class="main">
       <div id="video-wrap" class="video-wrap">
-        <video id="video" playsinline muted autoplay></video>
+        <div class="video-mirror">
+          <video id="video" autoplay muted playsinline webkit-playsinline></video>
+        </div>
         <div id="ear-label" class="ear-label" hidden>EAR —</div>
-        <div id="camera-prompt" class="camera-prompt" hidden>Tap to start camera</div>
+        <div id="camera-prompt" class="camera-prompt">Tap to start camera</div>
         <div id="camera-error" class="camera-error" hidden></div>
       </div>
 
@@ -115,12 +117,51 @@ function showCameraError(message: string): void {
   cameraError.textContent = message;
   cameraError.hidden = false;
   cameraPrompt.hidden = true;
+  videoWrap.classList.remove('is-live');
   earLabel.hidden = true;
 }
 
-function hideOverlays(): void {
+function showCameraPrompt(message = 'Tap to start camera'): void {
+  cameraPrompt.textContent = message;
+  cameraPrompt.hidden = false;
   cameraError.hidden = true;
+  videoWrap.classList.remove('is-live');
+}
+
+function markCameraLive(): void {
   cameraPrompt.hidden = true;
+  cameraError.hidden = true;
+  videoWrap.classList.add('is-live');
+}
+
+function isVideoLive(): boolean {
+  return stream !== null && video.videoWidth > 0 && !video.paused;
+}
+
+async function waitForVideoFrames(): Promise<void> {
+  if (video.videoWidth > 0) return;
+
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      reject(new Error('Camera preview timed out'));
+    }, 8000);
+
+    const done = (): void => {
+      window.clearTimeout(timeout);
+      resolve();
+    };
+
+    video.onloadedmetadata = () => {
+      if (video.videoWidth > 0) done();
+    };
+    video.onplaying = () => {
+      if (video.videoWidth > 0) done();
+    };
+    video.onerror = () => {
+      window.clearTimeout(timeout);
+      reject(new Error('Video failed to load'));
+    };
+  });
 }
 
 async function loadModel(): Promise<void> {
@@ -143,21 +184,22 @@ async function loadModel(): Promise<void> {
 }
 
 async function loop(): Promise<void> {
-  if (stream) {
-    const now = performance.now();
-    if (modelReady && engine) {
-      const frame = engine.detect(video, now);
-      if (frame) {
-        earLabel.textContent = `EAR ${frame.ear.toFixed(3)}`;
-        positionEarLabel(frame.landmarks);
+  if (stream && video.paused) {
+    void video.play().catch(() => undefined);
+  }
 
-        const blink = blinkDetector.update(frame.ear, now);
-        if (blink) {
-          morseMachine.onBlink(blink, now);
-        }
-      } else {
-        earLabel.hidden = true;
+  if (isVideoLive() && modelReady && engine) {
+    const frame = engine.detect(video, performance.now());
+    if (frame) {
+      earLabel.textContent = `EAR ${frame.ear.toFixed(3)}`;
+      positionEarLabel(frame.landmarks);
+
+      const blink = blinkDetector.update(frame.ear, performance.now());
+      if (blink) {
+        morseMachine.onBlink(blink, performance.now());
       }
+    } else {
+      earLabel.hidden = true;
     }
   }
 
@@ -166,32 +208,35 @@ async function loop(): Promise<void> {
 
 async function startCamera(): Promise<void> {
   if (starting || stream) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showCameraError('Camera is not supported in this browser');
+    return;
+  }
+
   starting = true;
-  cameraPrompt.hidden = true;
-  cameraError.hidden = true;
+  cameraPrompt.textContent = 'Starting camera…';
 
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
     });
+
     video.srcObject = stream;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
     video.muted = true;
 
-    await new Promise<void>((resolve, reject) => {
-      if (video.readyState >= 2) {
-        resolve();
-        return;
-      }
-      video.onloadeddata = () => resolve();
-      video.onerror = () => reject(new Error('Video failed to load'));
-    });
-
     await video.play();
-    hideOverlays();
+    await waitForVideoFrames();
+
+    if (!isVideoLive()) {
+      throw new Error('Camera preview is not available');
+    }
+
+    markCameraLive();
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(loop);
-
     void loadModel();
   } catch (err) {
     stream?.getTracks().forEach((t) => t.stop());
@@ -199,10 +244,10 @@ async function startCamera(): Promise<void> {
     video.srcObject = null;
 
     if (err instanceof DOMException && err.name === 'NotAllowedError') {
-      cameraPrompt.hidden = false;
-      cameraError.hidden = true;
+      showCameraPrompt('Tap to allow camera');
     } else {
       showCameraError(err instanceof Error ? err.message : 'Camera error');
+      showCameraPrompt('Tap to retry');
     }
   } finally {
     starting = false;
