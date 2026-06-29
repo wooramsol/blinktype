@@ -16,11 +16,23 @@ body {
   gap: 8px;
 }
 
+.title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .title {
   margin: 0;
   font: inherit;
   font-weight: normal;
   color: #ccc;
+}
+
+.credit {
+  color: #888;
+  white-space: nowrap;
 }
 
 .video-wrap {

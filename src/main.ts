@@ -14,7 +14,10 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 
 app.innerHTML = `
   <div class="layout">
-    <h1 class="title"># BlinkType v${pkg.version}</h1>
+    <div class="title-row">
+      <h1 class="title"># BlinkType v${pkg.version}</h1>
+      <span class="credit">@wooramsol</span>
+    </div>
     <div id="video-wrap" class="video-wrap">
       <div class="video-mirror">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
