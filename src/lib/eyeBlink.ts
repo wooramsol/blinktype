@@ -148,19 +148,13 @@ export function selfieEarHudPixels(
 
 export interface BlinkDetectorConfig {
   closedThreshold: number;
-  /** EAR must rise above this to arm the next wink. */
+  /** EAR must rise above this to arm the next wink (keep close to closed for fast re-arm). */
   rearmThreshold: number;
-  /** Minimum EAR drop on the winning eye to count as a wink. */
-  minDrop: number;
-  /** Winning-eye drop must exceed the other by at least this much. */
-  minAsymmetry: number;
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
-  closedThreshold: 0.26,
-  rearmThreshold: 0.255,
-  minDrop: 0.014,
-  minAsymmetry: 0.008,
+  closedThreshold: 0.23,
+  rearmThreshold: 0.248,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
@@ -172,65 +166,63 @@ export interface BlinkEvent {
   durationMs: number;
 }
 
-type DetectorState = {
-  prevLeft: number | null;
-  prevRight: number | null;
+type EyeState = {
+  prevEar: number | null;
   armed: boolean;
 };
 
 export class BlinkDetector {
-  private state: DetectorState = { prevLeft: null, prevRight: null, armed: true };
+  private left: EyeState = { prevEar: null, armed: true };
+  private right: EyeState = { prevEar: null, armed: true };
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
-  /**
-   * Selfie L wink = dot, selfie R wink = dash.
-   * The eye with the larger EAR drop wins (fixes occasional L/R swap).
-   */
-  update(leftEar: number, rightEar: number, _now = performance.now()): BlinkEvent | null {
-    const { prevLeft, prevRight } = this.state;
+  /** Selfie L wink = dot, selfie R wink = dash. Other eye must stay open. */
+  update(leftEar: number, rightEar: number, now = performance.now()): BlinkEvent | null {
+    const leftEvent = this.updateEye('left', leftEar, rightEar, this.left, now);
+    const rightEvent = this.updateEye('right', rightEar, leftEar, this.right, now);
 
-    if (prevLeft === null || prevRight === null) {
-      this.state.prevLeft = leftEar;
-      this.state.prevRight = rightEar;
+    if (leftEvent && rightEvent) return null;
+    return leftEvent ?? rightEvent;
+  }
+
+  private otherEyeOpen(otherEar: number): boolean {
+    return otherEar > this.config.closedThreshold - 0.03;
+  }
+
+  private updateEye(
+    eye: SelfieEye,
+    ear: number,
+    otherEar: number,
+    state: EyeState,
+    _now: number,
+  ): BlinkEvent | null {
+    if (state.prevEar === null) {
+      state.prevEar = ear;
       return null;
     }
 
-    const leftDrop = prevLeft - leftEar;
-    const rightDrop = prevRight - rightEar;
-    const { closedThreshold, rearmThreshold, minDrop, minAsymmetry } = this.config;
-
     let event: BlinkEvent | null = null;
 
-    if (this.state.armed) {
-      const leftWins = leftDrop >= rightDrop;
-      const winDrop = leftWins ? leftDrop : rightDrop;
-      const loseDrop = leftWins ? rightDrop : leftDrop;
-      const winEar = leftWins ? leftEar : rightEar;
-      const winPrev = leftWins ? prevLeft : prevRight;
-
-      const closingEdge = winPrev >= closedThreshold && winEar < closedThreshold;
-      const strongEnough =
-        winDrop >= minDrop &&
-        winDrop - loseDrop >= minAsymmetry &&
-        (closingEdge || winDrop >= minDrop * 1.4);
-
-      if (strongEnough) {
-        this.state.armed = false;
-        event = {
-          symbol: leftWins ? 'dot' : 'dash',
-          eye: leftWins ? 'left' : 'right',
-          durationMs: 0,
-        };
-      }
+    if (
+      state.armed &&
+      state.prevEar >= this.config.closedThreshold &&
+      ear < this.config.closedThreshold &&
+      this.otherEyeOpen(otherEar)
+    ) {
+      state.armed = false;
+      event = {
+        symbol: eye === 'left' ? 'dot' : 'dash',
+        eye,
+        durationMs: 0,
+      };
     }
 
-    if (!this.state.armed && leftEar > rearmThreshold && rightEar > rearmThreshold) {
-      this.state.armed = true;
+    if (!state.armed && ear > this.config.rearmThreshold) {
+      state.armed = true;
     }
 
-    this.state.prevLeft = leftEar;
-    this.state.prevRight = rightEar;
+    state.prevEar = ear;
     return event;
   }
 
