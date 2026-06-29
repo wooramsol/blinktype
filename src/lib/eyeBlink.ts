@@ -154,7 +154,7 @@ export interface BlinkDetectorConfig {
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   closedThreshold: 0.23,
-  rearmThreshold: 0.255,
+  rearmThreshold: 0.248,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
