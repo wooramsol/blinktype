@@ -9,9 +9,24 @@ const OVERLAY_OPACITY = 0.5;
 
 type Connection = { start: number; end: number };
 
-const EYE_CONTOURS: Connection[] = [
-  ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
-  ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
+/** Lower eyelid arc per eye (MediaPipe face mesh). */
+const LOWER_EYELID_CONTOURS: Connection[] = [
+  { start: 33, end: 7 },
+  { start: 7, end: 163 },
+  { start: 163, end: 144 },
+  { start: 144, end: 145 },
+  { start: 145, end: 153 },
+  { start: 153, end: 154 },
+  { start: 154, end: 155 },
+  { start: 155, end: 133 },
+  { start: 263, end: 466 },
+  { start: 466, end: 388 },
+  { start: 388, end: 387 },
+  { start: 387, end: 386 },
+  { start: 386, end: 385 },
+  { start: 385, end: 384 },
+  { start: 384, end: 398 },
+  { start: 398, end: 362 },
 ];
 
 /** Lower brow arc (eye-facing edge) per side — not the full eyebrow. */
@@ -36,8 +51,8 @@ const INNER_LIP_CONTOURS: Connection[] = FaceLandmarker.FACE_LANDMARKS_LIPS.filt
     INNER_LIP_INDICES.has(connection.start) && INNER_LIP_INDICES.has(connection.end),
 );
 
-const LEFT_EYE_INDICES = uniqueIndices(FaceLandmarker.FACE_LANDMARKS_LEFT_EYE);
-const RIGHT_EYE_INDICES = uniqueIndices(FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE);
+const LEFT_LOWER_EYELID_INDICES = uniqueIndices(LOWER_EYELID_CONTOURS.slice(0, 8));
+const RIGHT_LOWER_EYELID_INDICES = uniqueIndices(LOWER_EYELID_CONTOURS.slice(8));
 const LOWER_BROW_INDICES = uniqueIndices(LOWER_EYEBROW_CONTOURS);
 
 function uniqueIndices(connections: Connection[]): number[] {
@@ -50,8 +65,8 @@ function uniqueIndices(connections: Connection[]): number[] {
 }
 
 function expandedLandmarks(landmarks: Point2D[]): Map<number, Point2D> {
-  const leftEye = expandLandmarkRegion(landmarks, LEFT_EYE_INDICES, EYE_OVERLAY_EXPAND);
-  const rightEye = expandLandmarkRegion(landmarks, RIGHT_EYE_INDICES, EYE_OVERLAY_EXPAND);
+  const leftEye = expandLandmarkRegion(landmarks, LEFT_LOWER_EYELID_INDICES, EYE_OVERLAY_EXPAND);
+  const rightEye = expandLandmarkRegion(landmarks, RIGHT_LOWER_EYELID_INDICES, EYE_OVERLAY_EXPAND);
   return new Map([...leftEye, ...rightEye]);
 }
 
@@ -80,11 +95,11 @@ export function drawFaceOverlay(
   ctx.save();
   ctx.globalAlpha = OVERLAY_OPACITY;
 
-  drawConnections(ctx, landmarks, EYE_CONTOURS, w, h, '#fff', 1, expanded);
+  drawConnections(ctx, landmarks, LOWER_EYELID_CONTOURS, w, h, '#fff', 1, expanded);
   drawConnections(ctx, landmarks, LOWER_EYEBROW_CONTOURS, w, h, '#fff', 1);
   drawConnections(ctx, landmarks, INNER_LIP_CONTOURS, w, h, '#fff', 1);
 
-  for (const i of [...LEFT_EYE_INDICES, ...RIGHT_EYE_INDICES]) {
+  for (const i of [...LEFT_LOWER_EYELID_INDICES, ...RIGHT_LOWER_EYELID_INDICES]) {
     const p = expanded.get(i) ?? landmarks[i];
     drawPoint(ctx, p, w, h, '#fff', 2);
   }
