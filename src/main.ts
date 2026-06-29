@@ -2,6 +2,7 @@ import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
 import { BlinkDetector, faceSideHudAnchor } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
+import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import {
   MorseStateMachine,
   DEFAULT_MORSE_TIMING,
@@ -42,6 +43,7 @@ let engine: FaceLandmarkerEngine | null = null;
 let modelReady = false;
 let starting = false;
 const blinkDetector = new BlinkDetector();
+const headShakeDetector = new HeadShakeDetector();
 let committedText = '';
 let pendingBuffer = '';
 
@@ -99,6 +101,16 @@ const morseMachine = new MorseStateMachine(
     syncOutput();
   },
 );
+
+function backspaceOutput(): void {
+  if (pendingBuffer) {
+    pendingBuffer = '';
+    morseMachine.reset();
+  } else if (committedText.length > 0) {
+    committedText = committedText.slice(0, -1);
+  }
+  syncOutput();
+}
 
 function positionEarLabel(landmarks: { x: number; y: number }[]): void {
   const anchor = faceSideHudAnchor(landmarks);
@@ -161,15 +173,18 @@ async function loop(): Promise<void> {
   if (isVideoLive() && modelReady && engine) {
     const frame = engine.detect(video, performance.now());
     if (frame) {
+      const now = performance.now();
       resizeOverlayCanvas(overlay, video);
       drawFaceOverlay(overlayCtx, frame.landmarks);
 
       earLabel.textContent = `EAR ${frame.ear.toFixed(3)}`;
       positionEarLabel(frame.landmarks);
 
-      const blink = blinkDetector.update(frame.ear, performance.now());
+      const blink = blinkDetector.update(frame.ear, now);
       if (blink) {
-        morseMachine.onBlink(blink, performance.now());
+        morseMachine.onBlink(blink, now);
+      } else if (headShakeDetector.update(noseOffsetX(frame.landmarks), now)) {
+        backspaceOutput();
       }
     } else {
       earLabel.hidden = true;
