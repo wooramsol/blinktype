@@ -16,16 +16,24 @@ export class FaceLandmarkerEngine {
 
   async init(): Promise<void> {
     const vision = await FilesetResolver.forVisionTasks(WASM_CDN);
-    this.landmarker = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: MODEL_URL,
-        delegate: 'GPU',
-      },
-      runningMode: 'VIDEO',
+    const options = {
+      runningMode: 'VIDEO' as const,
       numFaces: 1,
       outputFaceBlendshapes: false,
       outputFacialTransformationMatrixes: false,
-    });
+    };
+
+    try {
+      this.landmarker = await FaceLandmarker.createFromOptions(vision, {
+        ...options,
+        baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
+      });
+    } catch {
+      this.landmarker = await FaceLandmarker.createFromOptions(vision, {
+        ...options,
+        baseOptions: { modelAssetPath: MODEL_URL, delegate: 'CPU' },
+      });
+    }
   }
 
   detect(video: HTMLVideoElement, timestampMs: number): FaceFrameResult | null {

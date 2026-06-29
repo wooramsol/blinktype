@@ -40,6 +40,8 @@ body {
   overflow: hidden;
   border: 1px solid var(--border);
   aspect-ratio: 4 / 3;
+  cursor: pointer;
+  background: #111827;
 }
 
 #video {
@@ -54,8 +56,6 @@ body {
 
 .ear-label {
   position: absolute;
-  transform: translate(-50%, -100%);
-  margin-top: -4px;
   padding: 0.15rem 0.35rem;
   font: 600 0.8rem/1.2 ui-monospace, monospace;
   color: #fff;
@@ -63,6 +63,21 @@ body {
   pointer-events: none;
   z-index: 2;
   white-space: nowrap;
+}
+
+.camera-prompt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.95rem;
+  text-align: center;
+  cursor: pointer;
+  z-index: 3;
 }
 
 .camera-error {

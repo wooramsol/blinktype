@@ -22,13 +22,18 @@ export function averageEar(landmarks: Point2D[]): number {
   return (eyeAspectRatio(landmarks, LEFT_EYE) + eyeAspectRatio(landmarks, RIGHT_EYE)) / 2;
 }
 
-/** Normalized anchor above the eyes for HUD placement (mirrored display uses 1 - x). */
-export function eyeHudAnchor(landmarks: Point2D[]): Point2D {
-  const left = landmarks[33];
-  const right = landmarks[263];
+/** Normalized anchor beside the face for HUD placement (mirrored display uses 1 - x). */
+export function faceSideHudAnchor(landmarks: Point2D[]): Point2D {
+  const nose = landmarks[1];
+  const leftCheek = landmarks[234];
+  const rightCheek = landmarks[454];
+  const useLeft =
+    Math.abs(leftCheek.x - nose.x) >= Math.abs(rightCheek.x - nose.x);
+  const cheek = useLeft ? leftCheek : rightCheek;
+  const outward = cheek.x < nose.x ? -0.06 : 0.06;
   return {
-    x: (left.x + right.x) / 2,
-    y: Math.min(left.y, right.y) - 0.04,
+    x: cheek.x + outward,
+    y: cheek.y,
   };
 }
 
