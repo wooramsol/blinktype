@@ -22,34 +22,32 @@ export function averageEar(landmarks: Point2D[]): number {
   return (eyeAspectRatio(landmarks, LEFT_EYE) + eyeAspectRatio(landmarks, RIGHT_EYE)) / 2;
 }
 
-/** Selfie mirror view: left on screen = subject right eye, right on screen = subject left eye. */
+/** Selfie mirror view: screen-left = subject left eye, screen-right = subject right eye. */
 export function selfieEyeEars(landmarks: Point2D[]): { left: number; right: number } {
   return {
-    left: eyeAspectRatio(landmarks, RIGHT_EYE),
-    right: eyeAspectRatio(landmarks, LEFT_EYE),
+    left: eyeAspectRatio(landmarks, LEFT_EYE),
+    right: eyeAspectRatio(landmarks, RIGHT_EYE),
   };
 }
 
-/** Anchor beside the selfie screen-left eye for EAR HUD (mirrored display uses 1 - x). */
+/** HUD anchor on the selfie screen-left side of the face, aligned with the left eye. */
 export function leftEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
-  const outer = landmarks[33];
   const y =
     (landmarks[160].y + landmarks[158].y + landmarks[153].y + landmarks[144].y) / 4;
-  const outward = 0.035;
+  const cheek = landmarks[234];
   return {
-    x: outer.x + outward,
+    x: cheek.x + 0.04,
     y,
   };
 }
 
-/** Anchor beside the selfie screen-right eye for EAR HUD (mirrored display uses 1 - x). */
+/** HUD anchor on the selfie screen-right side of the face, aligned with the right eye. */
 export function rightEyeEarHudAnchor(landmarks: Point2D[]): Point2D {
-  const outer = landmarks[263];
   const y =
     (landmarks[385].y + landmarks[387].y + landmarks[373].y + landmarks[380].y) / 4;
-  const outward = -0.035;
+  const cheek = landmarks[454];
   return {
-    x: outer.x + outward,
+    x: cheek.x - 0.04,
     y,
   };
 }

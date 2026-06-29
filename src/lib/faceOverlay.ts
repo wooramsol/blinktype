@@ -1,10 +1,25 @@
 import { FaceLandmarker } from '@mediapipe/tasks-vision';
 import type { Point2D } from './eyeBlink';
 
-const LEFT_EYE = [33, 160, 158, 133, 153, 144];
-const RIGHT_EYE = [362, 385, 387, 263, 373, 380];
-
 type Connection = { start: number; end: number };
+
+const EYE_CONTOURS: Connection[] = [
+  ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
+  ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
+  ...FaceLandmarker.FACE_LANDMARKS_LEFT_IRIS,
+  ...FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS,
+];
+
+function connectionIndices(connections: Connection[]): number[] {
+  const indices = new Set<number>();
+  for (const { start, end } of connections) {
+    indices.add(start);
+    indices.add(end);
+  }
+  return [...indices];
+}
+
+const EYE_POINT_INDICES = connectionIndices(EYE_CONTOURS);
 
 export function resizeOverlayCanvas(
   canvas: HTMLCanvasElement,
@@ -26,14 +41,9 @@ export function drawFaceOverlay(
   const h = ctx.canvas.height;
   ctx.clearRect(0, 0, w, h);
 
-  const contours: Connection[] = [
-    ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
-    ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
-  ];
+  drawConnections(ctx, landmarks, EYE_CONTOURS, w, h, '#fff', 1);
 
-  drawConnections(ctx, landmarks, contours, w, h, '#fff', 1);
-
-  for (const i of [...LEFT_EYE, ...RIGHT_EYE]) {
+  for (const i of EYE_POINT_INDICES) {
     drawPoint(ctx, landmarks[i], w, h, '#fff', 2);
   }
 }
