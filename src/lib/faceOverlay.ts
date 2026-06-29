@@ -5,6 +5,8 @@ import {
   type Point2D,
 } from './eyeBlink';
 
+const OVERLAY_OPACITY = 0.5;
+
 type Connection = { start: number; end: number };
 
 const EYE_CONTOURS: Connection[] = [
@@ -75,6 +77,9 @@ export function drawFaceOverlay(
 
   const expanded = expandedLandmarks(landmarks);
 
+  ctx.save();
+  ctx.globalAlpha = OVERLAY_OPACITY;
+
   drawConnections(ctx, landmarks, EYE_CONTOURS, w, h, '#fff', 1, expanded);
   drawConnections(ctx, landmarks, LOWER_EYEBROW_CONTOURS, w, h, '#fff', 1);
   drawConnections(ctx, landmarks, INNER_LIP_CONTOURS, w, h, '#fff', 1);
@@ -86,6 +91,8 @@ export function drawFaceOverlay(
   for (const i of LOWER_BROW_INDICES) {
     drawPoint(ctx, landmarks[i], w, h, '#fff', 2);
   }
+
+  ctx.restore();
 }
 
 function drawConnections(
