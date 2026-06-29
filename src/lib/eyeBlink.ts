@@ -57,7 +57,7 @@ export function eyeOpenness(
 ): number {
   const ear = eyeAspectRatio(landmarks, eye);
   const squint = eyeBrowSquintRatio(landmarks, eye, brow);
-  return ear * 0.45 + squint * 0.55;
+  return ear * 0.4 + squint * 0.6;
 }
 
 export function averageEar(landmarks: Point2D[]): number {
@@ -187,9 +187,9 @@ export interface BlinkDetectorConfig {
 }
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
-  closedThreshold: 0.26,
-  openThreshold: 0.28,
-  minBlinkMs: 55,
+  closedThreshold: 0.3,
+  openThreshold: 0.32,
+  minBlinkMs: 30,
 };
 
 export type BlinkSymbol = 'dot' | 'dash';
@@ -204,11 +204,12 @@ export interface BlinkEvent {
 type EyeState = {
   closed: boolean;
   closeStartedAt: number;
+  fired: boolean;
 };
 
 export class BlinkDetector {
-  private left: EyeState = { closed: false, closeStartedAt: 0 };
-  private right: EyeState = { closed: false, closeStartedAt: 0 };
+  private left: EyeState = { closed: false, closeStartedAt: 0, fired: false };
+  private right: EyeState = { closed: false, closeStartedAt: 0, fired: false };
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
@@ -231,23 +232,33 @@ export class BlinkDetector {
     if (
       !state.closed &&
       ear < this.config.closedThreshold &&
-      otherEar > this.config.closedThreshold
+      otherEar > this.config.closedThreshold - 0.03
     ) {
       state.closed = true;
       state.closeStartedAt = now;
+      state.fired = false;
       return null;
     }
 
-    if (state.closed && ear > this.config.openThreshold) {
-      state.closed = false;
-      const durationMs = now - state.closeStartedAt;
-      if (durationMs < this.config.minBlinkMs) return null;
-      if (otherEar <= this.config.closedThreshold) return null;
-      return {
-        symbol: eye === 'left' ? 'dot' : 'dash',
-        eye,
-        durationMs,
-      };
+    if (state.closed) {
+      if (ear > this.config.openThreshold) {
+        state.closed = false;
+        state.fired = false;
+        return null;
+      }
+
+      if (
+        !state.fired &&
+        now - state.closeStartedAt >= this.config.minBlinkMs &&
+        otherEar > this.config.closedThreshold - 0.03
+      ) {
+        state.fired = true;
+        return {
+          symbol: eye === 'left' ? 'dot' : 'dash',
+          eye,
+          durationMs: now - state.closeStartedAt,
+        };
+      }
     }
 
     return null;
