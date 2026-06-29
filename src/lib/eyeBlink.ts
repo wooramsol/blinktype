@@ -40,11 +40,10 @@ function eyeCenterX(landmarks: Point2D[], inner: number, outer: number): number 
   return (landmarks[inner].x + landmarks[outer].x) / 2;
 }
 
-function mirrorScreenX(landmarkX: number): number {
-  return 1 - landmarkX;
-}
-
-/** Resolve which eye is on the selfie screen-left vs screen-right. */
+/**
+ * Selfie mirror (scaleX -1): higher raw landmark x appears on the viewer's left.
+ * screen-left = user's left eye in the selfie preview.
+ */
 export function selfieScreenEyes(landmarks: Point2D[]): {
   screenLeft: ScreenEye;
   screenRight: ScreenEye;
@@ -60,37 +59,31 @@ export function selfieScreenEyes(landmarks: Point2D[]): {
     centerY: rightEyeCenterY(landmarks),
   };
 
-  const leftOnScreen = mirrorScreenX(eyeCenterX(landmarks, 133, 33));
-  const rightOnScreen = mirrorScreenX(eyeCenterX(landmarks, 362, 263));
+  const mpLeftCenterX = eyeCenterX(landmarks, 133, 33);
+  const mpRightCenterX = eyeCenterX(landmarks, 362, 263);
 
-  if (leftOnScreen < rightOnScreen) {
+  if (mpLeftCenterX > mpRightCenterX) {
     return { screenLeft: mpLeft, screenRight: mpRight };
   }
   return { screenLeft: mpRight, screenRight: mpLeft };
 }
 
-/** Selfie screen positions for L/R labels, pushed outside each eye. */
-export function selfieEarLabelPoints(
-  landmarks: Point2D[],
-  width: number,
-  height: number,
-): { screenLeft: Point2D; screenRight: Point2D } {
+/** Normalized anchor (0–1), same space as the face overlay inside the mirror. */
+export function selfieEarLabelAnchors(landmarks: Point2D[]): {
+  screenLeft: Point2D;
+  screenRight: Point2D;
+} {
   const eyes = selfieScreenEyes(landmarks);
-  const toScreen = (x: number, y: number): Point2D => ({
-    x: mirrorScreenX(x) * width,
-    y: y * height,
-  });
-  const nose = toScreen(landmarks[1].x, landmarks[1].y);
-  const pad = Math.max(20, width * 0.045);
+  const nose = landmarks[1];
+  const pad = 0.055;
 
   const pushOut = (eye: ScreenEye): Point2D => {
-    const outer = toScreen(eye.outerX, eye.centerY);
-    const dx = outer.x - nose.x;
-    const dy = outer.y - nose.y;
+    const dx = eye.outerX - nose.x;
+    const dy = eye.centerY - nose.y;
     const len = Math.hypot(dx, dy) || 1;
     return {
-      x: outer.x + (dx / len) * pad,
-      y: outer.y + (dy / len) * pad,
+      x: eye.outerX + (dx / len) * pad,
+      y: eye.centerY + (dy / len) * pad,
     };
   };
 

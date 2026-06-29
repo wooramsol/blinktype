@@ -1,6 +1,6 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
-import { BlinkDetector, selfieEarLabelPoints, selfieScreenEyes } from './lib/eyeBlink';
+import { BlinkDetector, selfieEarLabelAnchors, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import { MouthOpenDetector, mouthOpenRatio } from './lib/mouthOpen';
@@ -24,9 +24,9 @@ app.innerHTML = `
       <div class="video-mirror">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="overlay"></canvas>
+        <div id="ear-label-left" class="ear-label ear-label-left" hidden>L —</div>
+        <div id="ear-label-right" class="ear-label ear-label-right" hidden>R —</div>
       </div>
-      <div id="ear-label-left" class="ear-label" hidden>L —</div>
-      <div id="ear-label-right" class="ear-label" hidden>R —</div>
     </div>
     <textarea id="output" rows="8" spellcheck="false"></textarea>
   </div>
@@ -117,26 +117,19 @@ function backspaceOutput(): void {
 }
 
 function positionEarLabels(landmarks: { x: number; y: number }[]): void {
-  const w = videoWrap.clientWidth;
-  const h = videoWrap.clientHeight;
-  if (w === 0 || h === 0) return;
-
   const eyes = selfieScreenEyes(landmarks);
-  const { screenLeft, screenRight } = selfieEarLabelPoints(landmarks, w, h);
-  const gap = 8;
+  const { screenLeft, screenRight } = selfieEarLabelAnchors(landmarks);
 
   earLabelLeft.textContent = `L ${eyes.screenLeft.ear.toFixed(3)}`;
-  earLabelLeft.style.left = 'auto';
-  earLabelLeft.style.right = `${Math.max(0, w - screenLeft.x + gap)}px`;
-  earLabelLeft.style.top = `${screenLeft.y}px`;
-  earLabelLeft.style.transform = 'translateY(-50%)';
+  earLabelLeft.style.left = `${screenLeft.x * 100}%`;
+  earLabelLeft.style.top = `${screenLeft.y * 100}%`;
+  earLabelLeft.style.right = 'auto';
   earLabelLeft.hidden = false;
 
   earLabelRight.textContent = `R ${eyes.screenRight.ear.toFixed(3)}`;
-  earLabelRight.style.left = `${Math.min(w, screenRight.x + gap)}px`;
+  earLabelRight.style.left = `${screenRight.x * 100}%`;
+  earLabelRight.style.top = `${screenRight.y * 100}%`;
   earLabelRight.style.right = 'auto';
-  earLabelRight.style.top = `${screenRight.y}px`;
-  earLabelRight.style.transform = 'translateY(-50%)';
   earLabelRight.hidden = false;
 }
 

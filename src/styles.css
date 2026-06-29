@@ -88,6 +88,18 @@ body {
   pointer-events: none;
   z-index: 2;
   white-space: nowrap;
+  transform: scaleX(-1) translateY(-50%);
+  transform-origin: left center;
+}
+
+.ear-label-left {
+  transform: scaleX(-1) translate(8px, -50%);
+  transform-origin: left center;
+}
+
+.ear-label-right {
+  transform: scaleX(-1) translate(calc(-100% - 8px), -50%);
+  transform-origin: right center;
 }
 
 #output {
