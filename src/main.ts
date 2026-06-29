@@ -1,8 +1,9 @@
 import './styles.css';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
+import type { Point2D } from './lib/eyeBlink';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
-import { MouthMorseDetector, mouthOpenRatio } from './lib/mouthOpen';
+import { MouthMorseDetector, classifyMouthShape, mouthShapeLabel } from './lib/mouthOpen';
 import {
   MorseStateMachine,
   DEFAULT_MORSE_TIMING,
@@ -27,7 +28,7 @@ app.innerHTML = `
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="overlay"></canvas>
       </div>
-      <div id="mouth-label" class="ear-label mouth-hud" hidden>M —</div>
+      <div id="mouth-label" class="ear-label mouth-hud" hidden>—</div>
     </div>
     <textarea id="output" rows="8" spellcheck="false"></textarea>
   </div>
@@ -120,12 +121,13 @@ function backspaceOutput(): void {
   syncOutput();
 }
 
-function positionMouthLabel(ratio: number): void {
+function positionMouthLabel(landmarks: Point2D[]): void {
   const w = videoWrap.clientWidth;
   const h = videoWrap.clientHeight;
   if (w === 0 || h === 0) return;
 
-  mouthLabel.textContent = `M ${ratio.toFixed(3)}`;
+  const shape = classifyMouthShape(landmarks);
+  mouthLabel.textContent = mouthShapeLabel(shape);
   mouthLabel.style.left = `${w * 0.5}px`;
   mouthLabel.style.top = `${h * 0.88}px`;
   mouthLabel.hidden = false;
@@ -190,10 +192,9 @@ async function loop(): Promise<void> {
       resizeOverlayCanvas(overlay, video);
       drawFaceOverlay(overlayCtx, frame.landmarks);
 
-      const ratio = mouthOpenRatio(frame.landmarks);
-      positionMouthLabel(ratio);
+      positionMouthLabel(frame.landmarks);
 
-      const mouth = mouthMorseDetector.update(ratio, now);
+      const mouth = mouthMorseDetector.update(frame.landmarks, now);
       if (mouth) {
         morseAudio.play(mouth.symbol);
         morseMachine.onMorseSymbol(mouth.symbol, now);
