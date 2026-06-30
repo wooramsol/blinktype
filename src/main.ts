@@ -1,10 +1,8 @@
 import './styles.css';
-import { CalibrationSession, formatPatternStats, openCalibrationTiming, type TimingSnapshot } from './lib/calibration';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
 import { BlinkDetector, averageEar, selfieEarHudPixels, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
-import { wordMorseHint } from './lib/morse';
 import {
   MorseStateMachine,
   morseToDisplay,
@@ -43,10 +41,7 @@ app.innerHTML = `
   <div class="layout">
     <div class="title-row">
       <h1 class="title"># BlinkType ${versionLabel(pkg.version)}</h1>
-      <div class="title-actions">
-        <button type="button" id="calibrate-btn" class="calibrate-btn">cal</button>
-        <span class="credit">@wooramsol</span>
-      </div>
+      <span class="credit">@wooramsol</span>
     </div>
     <div id="video-wrap" class="video-wrap">
       <div class="video-controls">
@@ -76,11 +71,6 @@ app.innerHTML = `
           <span id="ear-closed-val" class="timing-val">${EAR_CLOSED_DEFAULT}</span>
         </div>
       </div>
-      <div id="calibration-hud" class="calibration-hud" hidden>
-        <div id="cal-target" class="cal-target"></div>
-        <div id="cal-morse" class="cal-morse"></div>
-        <div id="cal-meta" class="cal-meta"></div>
-      </div>
       <div class="video-mirror">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="overlay"></canvas>
@@ -97,11 +87,6 @@ const overlay = document.querySelector<HTMLCanvasElement>('#overlay')!;
 const overlayCtx = overlay.getContext('2d')!;
 const output = document.querySelector<HTMLTextAreaElement>('#output')!;
 const earLabel = document.querySelector<HTMLDivElement>('#ear-label')!;
-const calibrateBtn = document.querySelector<HTMLButtonElement>('#calibrate-btn')!;
-const calibrationHud = document.querySelector<HTMLDivElement>('#calibration-hud')!;
-const calTarget = document.querySelector<HTMLDivElement>('#cal-target')!;
-const calMorse = document.querySelector<HTMLDivElement>('#cal-morse')!;
-const calMeta = document.querySelector<HTMLDivElement>('#cal-meta')!;
 const dotMaxMsInput = document.querySelector<HTMLInputElement>('#dot-max-ms')!;
 const dotMaxMsVal = document.querySelector<HTMLSpanElement>('#dot-max-ms-val')!;
 const letterGapMsInput = document.querySelector<HTMLInputElement>('#letter-gap-ms')!;
@@ -123,20 +108,6 @@ function loadSavedMs(
   return Number.isFinite(saved) && saved >= min && saved <= max ? saved : fallback;
 }
 
-function setSlider(
-  input: HTMLInputElement,
-  valEl: HTMLSpanElement,
-  key: string,
-  value: number,
-  onChange: (ms: number) => void,
-  persist: boolean,
-): void {
-  input.value = String(value);
-  valEl.textContent = String(value);
-  onChange(value);
-  if (persist) localStorage.setItem(key, String(value));
-}
-
 function bindMsSlider(
   input: HTMLInputElement,
   valEl: HTMLSpanElement,
@@ -147,10 +118,14 @@ function bindMsSlider(
   onChange: (ms: number) => void,
 ): number {
   const initial = loadSavedMs(key, min, max, fallback);
-  setSlider(input, valEl, key, initial, onChange, false);
+  input.value = String(initial);
+  valEl.textContent = String(initial);
+  onChange(initial);
   input.addEventListener('input', () => {
     const ms = Number(input.value);
-    setSlider(input, valEl, key, ms, onChange, true);
+    valEl.textContent = String(ms);
+    onChange(ms);
+    localStorage.setItem(key, String(ms));
   });
   return initial;
 }
@@ -220,185 +195,10 @@ bindMsSlider(
     });
   },
 );
-
 const headShakeDetector = new HeadShakeDetector();
 const morseAudio = new MorseAudio();
-const calibrationSession = new CalibrationSession();
-let calibrationActive = false;
-let savedTimingBeforeCal: TimingSnapshot | null = null;
-let accumulatedTuning: TimingSnapshot | null = null;
 let committedText = '';
 let pendingBuffer = '';
-
-function getTimingSnapshot(): TimingSnapshot {
-  return {
-    dotMaxMs: Number(dotMaxMsInput.value),
-    letterGapMs: Number(letterGapMsInput.value),
-    cooldownMs: Number(cooldownMsInput.value),
-    minBlinkMs: Number(minBlinkMsInput.value),
-    earClosed: Number(earClosedInput.value),
-  };
-}
-
-function applyDetection(snapshot: TimingSnapshot): void {
-  const closed = snapshot.earClosed / 1000;
-  blinkDetector.setConfig({
-    dotMaxMs: snapshot.dotMaxMs,
-    cooldownMs: snapshot.cooldownMs,
-    minBlinkMs: snapshot.minBlinkMs,
-    closedThreshold: closed,
-    rearmThreshold: closed + EAR_REARM_DELTA,
-  });
-  morseMachine.setTiming({ letterGapMs: snapshot.letterGapMs });
-}
-
-function applyTimingSnapshot(snapshot: TimingSnapshot, persist = true): void {
-  applyDetection(snapshot);
-  setSlider(
-    dotMaxMsInput,
-    dotMaxMsVal,
-    DOT_MAX_MS_KEY,
-    snapshot.dotMaxMs,
-    (ms) => blinkDetector.setConfig({ dotMaxMs: ms }),
-    persist,
-  );
-  setSlider(
-    letterGapMsInput,
-    letterGapMsVal,
-    LETTER_GAP_MS_KEY,
-    snapshot.letterGapMs,
-    (ms) => morseMachine.setTiming({ letterGapMs: ms }),
-    persist,
-  );
-  setSlider(
-    cooldownMsInput,
-    cooldownMsVal,
-    COOLDOWN_MS_KEY,
-    snapshot.cooldownMs,
-    (ms) => blinkDetector.setConfig({ cooldownMs: ms }),
-    persist,
-  );
-  setSlider(
-    minBlinkMsInput,
-    minBlinkMsVal,
-    MIN_BLINK_MS_KEY,
-    snapshot.minBlinkMs,
-    (ms) => blinkDetector.setConfig({ minBlinkMs: ms }),
-    persist,
-  );
-  setSlider(
-    earClosedInput,
-    earClosedVal,
-    EAR_CLOSED_KEY,
-    snapshot.earClosed,
-    (v) => {
-      const c = v / 1000;
-      blinkDetector.setConfig({
-        closedThreshold: c,
-        rearmThreshold: c + EAR_REARM_DELTA,
-      });
-    },
-    persist,
-  );
-}
-
-function applyOpenCalibrationDetection(): void {
-  applyDetection(openCalibrationTiming());
-}
-
-function updateCalibrationHud(note = ''): void {
-  if (!calibrationActive) return;
-  const word = calibrationSession.currentWord;
-  calTarget.textContent = word ? `type: ${word}` : 'done';
-  calMorse.textContent = word ? wordMorseHint(word) : '';
-  calMeta.textContent = [
-    `round ${calibrationSession.roundNumber}/${calibrationSession.totalRounds}`,
-    calibrationSession.progressLabel,
-    note,
-  ]
-    .filter(Boolean)
-    .join('  ·  ');
-}
-
-function startCalibration(): void {
-  calibrationActive = true;
-  savedTimingBeforeCal = getTimingSnapshot();
-  accumulatedTuning = { ...savedTimingBeforeCal };
-  calibrationSession.reset();
-  morseMachine.reset();
-  pendingBuffer = '';
-  syncOutput();
-  applyOpenCalibrationDetection();
-  calibrationHud.hidden = false;
-  videoWrap.classList.add('calibrating');
-  calibrateBtn.textContent = 'done';
-  calibrateBtn.classList.add('active');
-  updateCalibrationHud('blink the word · Enter when done · measuring your rhythm');
-}
-
-function submitCalibrationRound(): void {
-  if (!calibrationActive) return;
-
-  morseMachine.flush();
-
-  if (!calibrationSession.hasAttempts()) {
-    updateCalibrationHud('blink the word, then press Enter');
-    return;
-  }
-
-  const baseline = accumulatedTuning ?? getTimingSnapshot();
-  const result = calibrationSession.finishRound(baseline);
-  accumulatedTuning = result.tuning;
-  applyTimingSnapshot(result.tuning, true);
-  applyOpenCalibrationDetection();
-  morseMachine.reset();
-  pendingBuffer = '';
-  const measured = formatPatternStats(result.pattern);
-  updateCalibrationHud(`${result.accuracy}% · ${measured}`);
-
-  if (!calibrationSession.active) {
-    stopCalibration(`calibration complete · avg ${calibrationSession.overallAccuracy()}%`);
-    return;
-  }
-
-  window.setTimeout(() => {
-    if (calibrationActive) updateCalibrationHud('blink the word · Enter when done · measuring your rhythm');
-  }, 1200);
-}
-
-function stopCalibration(message = ''): void {
-  const hadRounds = calibrationSession.results.length > 0;
-  calibrationActive = false;
-  calibrationHud.hidden = true;
-  videoWrap.classList.remove('calibrating');
-  calibrateBtn.textContent = 'cal';
-  calibrateBtn.classList.remove('active');
-  morseMachine.reset();
-  pendingBuffer = '';
-
-  if (hadRounds && accumulatedTuning) {
-    applyTimingSnapshot(accumulatedTuning, true);
-  } else if (savedTimingBeforeCal) {
-    applyTimingSnapshot(savedTimingBeforeCal, false);
-  }
-
-  savedTimingBeforeCal = null;
-  accumulatedTuning = null;
-  syncOutput();
-
-  if (message) {
-    calMeta.textContent = message;
-    calibrationHud.hidden = false;
-    window.setTimeout(() => {
-      if (!calibrationActive) calibrationHud.hidden = true;
-    }, 2800);
-  }
-}
-
-function onCalibrationLetter(event: MorseCommitEvent): void {
-  calibrationSession.onLetterCommit(event.char, event.morse);
-  updateCalibrationHud();
-}
 
 function displayValue(): string {
   const spaced = committedText ? formatCommittedText(committedText) : '';
@@ -433,8 +233,6 @@ function syncOutput(): void {
 }
 
 function onUserEdit(): void {
-  if (calibrationActive) return;
-
   const pendingDisplay = pendingBuffer ? morseToDisplay(pendingBuffer) : '';
   const val = output.value;
 
@@ -451,18 +249,12 @@ function onUserEdit(): void {
 const morseMachine = new MorseStateMachine(
   { letterGapMs: initialLetterGapMs },
   (event: MorseCommitEvent) => {
-    if (calibrationActive) {
-      onCalibrationLetter(event);
-      pendingBuffer = '';
-      return;
-    }
     committedText += event.char.toLowerCase();
     pendingBuffer = '';
     syncOutput();
   },
   (buffer) => {
     pendingBuffer = buffer;
-    if (calibrationActive) return;
     syncOutput();
   },
 );
@@ -478,13 +270,6 @@ bindMsSlider(
 );
 
 function backspaceOutput(): void {
-  if (calibrationActive) {
-    morseMachine.reset();
-    pendingBuffer = '';
-    updateCalibrationHud();
-    return;
-  }
-
   if (pendingBuffer) {
     pendingBuffer = '';
     morseMachine.reset();
@@ -573,7 +358,6 @@ async function loop(): Promise<void> {
       const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
       if (blink) {
         morseAudio.play(blink.symbol);
-        if (calibrationActive) calibrationSession.recordBlink(blink);
         morseMachine.onBlink(blink, now);
       } else if (headShakeDetector.update(noseOffsetX(frame.landmarks), now)) {
         backspaceOutput();
@@ -617,21 +401,6 @@ async function startCamera(): Promise<void> {
     starting = false;
   }
 }
-
-calibrateBtn.addEventListener('click', () => {
-  morseAudio.unlock();
-  if (calibrationActive) {
-    stopCalibration();
-    return;
-  }
-  startCalibration();
-});
-
-document.addEventListener('keydown', (e) => {
-  if (!calibrationActive || e.key !== 'Enter' || e.repeat) return;
-  e.preventDefault();
-  submitCalibrationRound();
-});
 
 videoWrap.addEventListener('click', () => {
   morseAudio.unlock();

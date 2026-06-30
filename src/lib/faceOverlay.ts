@@ -16,14 +16,6 @@ type Connection = { start: number; end: number };
 /** MediaPipe names are camera-left/right; each eye contour is lower arc then upper arc. */
 const MP_EYE_A = FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE;
 const MP_EYE_B = FaceLandmarker.FACE_LANDMARKS_LEFT_EYE;
-const MP_IRIS_A = FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS;
-const MP_IRIS_B = FaceLandmarker.FACE_LANDMARKS_LEFT_IRIS;
-
-/** Iris center landmarks (MediaPipe 478-point mesh). */
-const IRIS_CENTER_INDICES = [468, 473] as const;
-
-const IRIS_CONTOURS: Connection[] = [...MP_IRIS_A, ...MP_IRIS_B];
-const IRIS_INDICES = uniqueIndices(IRIS_CONTOURS);
 
 /** Lower brow arc (eye-facing edge) per side — not the full eyebrow. */
 const LOWER_EYEBROW_CONTOURS: Connection[] = [
@@ -185,18 +177,11 @@ export function drawFaceOverlay(
   drawEyeGrid(ctx, eyeGridPoints(MP_EYE_B, landmarks), w, h);
 
   drawConnections(ctx, landmarks, eyelids, w, h, '#fff', 1, expanded);
-  drawConnections(ctx, landmarks, IRIS_CONTOURS, w, h, '#fff', 1.25);
   drawConnections(ctx, landmarks, LOWER_EYEBROW_CONTOURS, w, h, '#fff', 1);
 
   for (const i of eyelidIndices) {
     const p = expanded.get(i) ?? landmarks[i];
     drawPoint(ctx, p, w, h, '#fff', 2);
-  }
-  for (const i of IRIS_INDICES) {
-    drawPoint(ctx, landmarks[i], w, h, '#fff', 2);
-  }
-  for (const i of IRIS_CENTER_INDICES) {
-    drawPoint(ctx, landmarks[i], w, h, '#fff', 1.5);
   }
   for (const i of LOWER_BROW_INDICES) {
     drawPoint(ctx, landmarks[i], w, h, '#fff', 2);
