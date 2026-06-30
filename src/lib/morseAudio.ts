@@ -17,6 +17,14 @@ export class MorseAudio {
     }
   }
 
+  playMorse(morse: string): void {
+    for (const ch of morse) {
+      if (ch === '.' || ch === '-') {
+        this.play(ch === '.' ? 'dot' : 'dash');
+      }
+    }
+  }
+
   play(symbol: 'dot' | 'dash'): void {
     const ctx = this.getContext();
     if (!ctx) return;

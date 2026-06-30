@@ -1,13 +1,16 @@
 import { decodeMorse } from './morse';
 import type { BlinkEvent } from './eyeBlink';
-import { MORSE_LETTER_GAP_MS } from './morseTiming';
+import { durationsToMorse, nextDotBaseline } from './morseClassify';
+import { DASH_RATIO_DEFAULT, MORSE_LETTER_GAP_MS } from './morseTiming';
 
 export interface MorseTimingConfig {
   letterGapMs: number;
+  dashRatio: number;
 }
 
 export const DEFAULT_MORSE_TIMING: MorseTimingConfig = {
   letterGapMs: MORSE_LETTER_GAP_MS,
+  dashRatio: DASH_RATIO_DEFAULT,
 };
 
 export interface MorseCommitEvent {
@@ -17,19 +20,18 @@ export interface MorseCommitEvent {
 }
 
 export class MorseStateMachine {
-  private buffer = '';
+  private durations: number[] = [];
+  private priorDotBaseline: number | undefined;
   /** When > 0, commit the buffer once performance.now() reaches this time. */
   private letterDeadline = 0;
 
   constructor(
     private timing: MorseTimingConfig = DEFAULT_MORSE_TIMING,
     private onCommit: (event: MorseCommitEvent) => void,
-    private onBufferChange: (buffer: string) => void,
   ) {}
 
   onBlink(event: BlinkEvent, now = performance.now()): void {
-    this.buffer += event.symbol === 'dot' ? '.' : '-';
-    this.onBufferChange(this.buffer);
+    this.durations.push(event.durationMs);
     this.letterDeadline = now + this.timing.letterGapMs;
   }
 
@@ -42,12 +44,22 @@ export class MorseStateMachine {
   }
 
   private commitLetter(): void {
-    if (!this.buffer) return;
-    const morse = this.buffer;
-    const decoded = decodeMorse(morse);
-    this.buffer = '';
-    this.onBufferChange('');
+    if (this.durations.length === 0) return;
 
+    const morse = durationsToMorse(
+      this.durations,
+      this.timing.dashRatio,
+      this.priorDotBaseline,
+    );
+    this.priorDotBaseline = nextDotBaseline(
+      this.durations,
+      morse,
+      this.timing.dashRatio,
+      this.priorDotBaseline,
+    );
+    this.durations = [];
+
+    const decoded = decodeMorse(morse);
     if (decoded) {
       this.onCommit({ type: 'letter', morse, char: decoded });
     } else {
@@ -57,15 +69,18 @@ export class MorseStateMachine {
 
   /** Commit any in-progress letter immediately (e.g. before inserting a space). */
   flush(): void {
-    if (!this.buffer) return;
+    if (this.durations.length === 0) return;
     this.letterDeadline = 0;
     this.commitLetter();
   }
 
   reset(): void {
     this.letterDeadline = 0;
-    this.buffer = '';
-    this.onBufferChange('');
+    this.durations = [];
+  }
+
+  hasPendingLetter(): boolean {
+    return this.durations.length > 0;
   }
 
   setTiming(timing: Partial<MorseTimingConfig>): void {

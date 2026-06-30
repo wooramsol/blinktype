@@ -5,7 +5,6 @@ import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/fa
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import {
   MorseStateMachine,
-  morseToDisplay,
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
 import { MorseAudio } from './lib/morseAudio';
@@ -165,11 +164,10 @@ const blinkDetector = new BlinkDetector();
 const initialDashRatioSlider = loadSavedDashRatioSlider();
 dotMaxMsInput.value = String(initialDashRatioSlider);
 dotMaxMsVal.textContent = formatDashRatioSlider(initialDashRatioSlider);
-blinkDetector.setConfig({ dashRatio: sliderToDashRatio(initialDashRatioSlider) });
 dotMaxMsInput.addEventListener('input', () => {
   const v = Number(dotMaxMsInput.value);
   dotMaxMsVal.textContent = formatDashRatioSlider(v);
-  blinkDetector.setConfig({ dashRatio: sliderToDashRatio(v) });
+  morseMachine.setTiming({ dashRatio: sliderToDashRatio(v) });
   localStorage.setItem(DOT_MAX_MS_KEY, String(v));
 });
 
@@ -218,11 +216,9 @@ bindMsSlider(
 const headShakeDetector = new HeadShakeDetector();
 const morseAudio = new MorseAudio();
 let committedText = '';
-let pendingBuffer = '';
 
 function displayValue(): string {
-  const spaced = committedText ? formatCommittedText(committedText) : '';
-  return spaced + (pendingBuffer ? morseToDisplay(pendingBuffer) : '');
+  return committedText ? formatCommittedText(committedText) : '';
 }
 
 function parseCommittedDisplay(display: string): string {
@@ -236,45 +232,28 @@ function syncOutput(): void {
   const selStart = output.selectionStart ?? next.length;
   const selEnd = output.selectionEnd ?? next.length;
   const hadFocus = document.activeElement === output;
-  const pendingDisplay = pendingBuffer ? morseToDisplay(pendingBuffer) : '';
-  const editingCommitted =
-    hadFocus && pendingDisplay && selEnd <= output.value.length - pendingDisplay.length;
 
   output.value = next;
   output.scrollTop = output.scrollHeight;
 
   if (hadFocus) {
-    if (editingCommitted) {
-      output.setSelectionRange(selStart, selEnd);
-    } else {
-      output.setSelectionRange(next.length, next.length);
-    }
+    output.setSelectionRange(selStart, selEnd);
   }
 }
 
 function onUserEdit(): void {
-  const pendingDisplay = pendingBuffer ? morseToDisplay(pendingBuffer) : '';
-  const val = output.value;
-
-  if (pendingDisplay && val.endsWith(pendingDisplay)) {
-    committedText = parseCommittedDisplay(val.slice(0, -pendingDisplay.length));
-    return;
-  }
-
-  committedText = parseCommittedDisplay(val);
-  pendingBuffer = '';
+  committedText = parseCommittedDisplay(output.value);
   morseMachine.reset();
 }
 
 const morseMachine = new MorseStateMachine(
-  { letterGapMs: initialLetterGapMs },
+  {
+    letterGapMs: initialLetterGapMs,
+    dashRatio: sliderToDashRatio(initialDashRatioSlider),
+  },
   (event: MorseCommitEvent) => {
     committedText += event.char.toLowerCase();
-    pendingBuffer = '';
-    syncOutput();
-  },
-  (buffer) => {
-    pendingBuffer = buffer;
+    morseAudio.playMorse(event.morse);
     syncOutput();
   },
 );
@@ -290,8 +269,7 @@ bindMsSlider(
 );
 
 function backspaceOutput(): void {
-  if (pendingBuffer) {
-    pendingBuffer = '';
+  if (morseMachine.hasPendingLetter()) {
     morseMachine.reset();
   } else if (committedText.length > 0) {
     committedText = committedText.slice(0, -1);
@@ -377,7 +355,6 @@ async function loop(): Promise<void> {
       const eyes = selfieScreenEyes(frame.landmarks);
       const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
       if (blink) {
-        morseAudio.play(blink.symbol);
         morseMachine.onBlink(blink, now);
       } else if (headShakeDetector.update(noseOffsetX(frame.landmarks), now)) {
         backspaceOutput();
