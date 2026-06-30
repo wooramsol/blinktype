@@ -176,6 +176,8 @@ export type BlinkSymbol = 'dot' | 'dash';
 export interface BlinkEvent {
   symbol: BlinkSymbol;
   durationMs: number;
+  /** performance.now() when eyes reopened (blink end). */
+  endedAt: number;
 }
 
 export class BlinkDetector {
@@ -207,6 +209,7 @@ export class BlinkDetector {
       return {
         symbol: durationMs <= this.config.dotMaxMs ? 'dot' : 'dash',
         durationMs,
+        endedAt: now,
       };
     }
 

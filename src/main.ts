@@ -1,5 +1,5 @@
 import './styles.css';
-import { CalibrationSession, openCalibrationTiming, type TimingSnapshot } from './lib/calibration';
+import { CalibrationSession, formatPatternStats, openCalibrationTiming, type TimingSnapshot } from './lib/calibration';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
 import { BlinkDetector, averageEar, selfieEarHudPixels, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
@@ -333,7 +333,7 @@ function startCalibration(): void {
   videoWrap.classList.add('calibrating');
   calibrateBtn.textContent = 'done';
   calibrateBtn.classList.add('active');
-  updateCalibrationHud('blink the word · Enter when done');
+  updateCalibrationHud('blink the word · Enter when done · measuring your rhythm');
 }
 
 function submitCalibrationRound(): void {
@@ -353,7 +353,8 @@ function submitCalibrationRound(): void {
   applyOpenCalibrationDetection();
   morseMachine.reset();
   pendingBuffer = '';
-  updateCalibrationHud(`${result.accuracy}% · sliders updated`);
+  const measured = formatPatternStats(result.pattern);
+  updateCalibrationHud(`${result.accuracy}% · ${measured}`);
 
   if (!calibrationSession.active) {
     stopCalibration(`calibration complete · avg ${calibrationSession.overallAccuracy()}%`);
@@ -361,7 +362,7 @@ function submitCalibrationRound(): void {
   }
 
   window.setTimeout(() => {
-    if (calibrationActive) updateCalibrationHud('blink the word · Enter when done');
+    if (calibrationActive) updateCalibrationHud('blink the word · Enter when done · measuring your rhythm');
   }, 1200);
 }
 
