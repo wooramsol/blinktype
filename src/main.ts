@@ -333,7 +333,36 @@ function startCalibration(): void {
   videoWrap.classList.add('calibrating');
   calibrateBtn.textContent = 'done';
   calibrateBtn.classList.add('active');
-  updateCalibrationHud('open detection — blink the word');
+  updateCalibrationHud('blink the word · Enter when done');
+}
+
+function submitCalibrationRound(): void {
+  if (!calibrationActive) return;
+
+  morseMachine.flush();
+
+  if (!calibrationSession.hasAttempts()) {
+    updateCalibrationHud('blink the word, then press Enter');
+    return;
+  }
+
+  const baseline = accumulatedTuning ?? getTimingSnapshot();
+  const result = calibrationSession.finishRound(baseline);
+  accumulatedTuning = result.tuning;
+  applyTimingSnapshot(result.tuning, true);
+  applyOpenCalibrationDetection();
+  morseMachine.reset();
+  pendingBuffer = '';
+  updateCalibrationHud(`${result.accuracy}% · sliders updated`);
+
+  if (!calibrationSession.active) {
+    stopCalibration(`calibration complete · avg ${calibrationSession.overallAccuracy()}%`);
+    return;
+  }
+
+  window.setTimeout(() => {
+    if (calibrationActive) updateCalibrationHud('blink the word · Enter when done');
+  }, 1200);
 }
 
 function stopCalibration(message = ''): void {
@@ -366,28 +395,8 @@ function stopCalibration(message = ''): void {
 }
 
 function onCalibrationLetter(event: MorseCommitEvent): void {
-  const wordDone = calibrationSession.onLetterCommit(event.char, event.morse);
+  calibrationSession.onLetterCommit(event.char, event.morse);
   updateCalibrationHud();
-
-  if (!wordDone) return;
-
-  const baseline = accumulatedTuning ?? getTimingSnapshot();
-  const result = calibrationSession.finishRound(baseline);
-  accumulatedTuning = result.tuning;
-  applyTimingSnapshot(result.tuning, true);
-  applyOpenCalibrationDetection();
-  morseMachine.reset();
-  pendingBuffer = '';
-  updateCalibrationHud(`${result.accuracy}% · sliders updated`);
-
-  if (!calibrationSession.active) {
-    stopCalibration(`calibration complete · avg ${calibrationSession.overallAccuracy()}%`);
-    return;
-  }
-
-  window.setTimeout(() => {
-    if (calibrationActive) updateCalibrationHud();
-  }, 1200);
 }
 
 function displayValue(): string {
@@ -615,6 +624,12 @@ calibrateBtn.addEventListener('click', () => {
     return;
   }
   startCalibration();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (!calibrationActive || e.key !== 'Enter' || e.repeat) return;
+  e.preventDefault();
+  submitCalibrationRound();
 });
 
 videoWrap.addEventListener('click', () => {
