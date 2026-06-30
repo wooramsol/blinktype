@@ -237,7 +237,11 @@ export class CalibrationSession {
     if (!w) return '';
     const exp = w[this.letterIndex]?.toUpperCase() ?? '—';
     const expMorse = encodeLetter(exp) ?? '';
-    return `letter ${this.letterIndex + 1}/${w.length}  ${exp}  ${morseToDisplay(expMorse)}`;
+    return `${this.attempts.length}/${w.length} letters  ·  next: ${exp} ${morseToDisplay(expMorse)}  ·  Enter`;
+  }
+
+  hasAttempts(): boolean {
+    return this.attempts.length > 0;
   }
 
   get roundNumber(): number {
@@ -266,9 +270,9 @@ export class CalibrationSession {
     this.allBlinks.push(blink);
   }
 
-  onLetterCommit(got: string, gotMorse: string): boolean {
+  onLetterCommit(got: string, gotMorse: string): void {
     const word = this.currentWord;
-    if (!word || this.letterIndex >= word.length) return false;
+    if (!word || this.letterIndex >= word.length) return;
 
     const expected = word[this.letterIndex].toLowerCase();
     const expectedMorse = encodeLetter(expected) ?? '';
@@ -282,8 +286,6 @@ export class CalibrationSession {
     });
     this.letterBlinks = [];
     this.letterIndex++;
-
-    return this.letterIndex >= word.length;
   }
 
   finishRound(baseline: TimingSnapshot): CalibrationRoundResult {
