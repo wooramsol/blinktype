@@ -1,5 +1,5 @@
 import {
-  MORSE_DOT_DASH_THRESHOLD_MS,
+  DASH_RATIO_DEFAULT,
   MIN_BLINK_MS_DEFAULT,
   COOLDOWN_MS_DEFAULT,
   EAR_CLOSED_DEFAULT,
@@ -158,16 +158,18 @@ export interface BlinkDetectorConfig {
   rearmThreshold: number;
   /** Ignore blinks shorter than this (noise). */
   minBlinkMs: number;
-  /** Closed duration at or below this → dot; longer → dash. */
-  dotMaxMs: number;
+  /** Dash when duration ≥ dot baseline × this ratio (relative). */
+  dashRatio: number;
   cooldownMs: number;
 }
+
+const RECENT_DURATION_CAP = 8;
 
 export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   closedThreshold: EAR_CLOSED_DEFAULT / 1000,
   rearmThreshold: EAR_CLOSED_DEFAULT / 1000 + EAR_REARM_DELTA,
   minBlinkMs: MIN_BLINK_MS_DEFAULT,
-  dotMaxMs: MORSE_DOT_DASH_THRESHOLD_MS,
+  dashRatio: DASH_RATIO_DEFAULT,
   cooldownMs: COOLDOWN_MS_DEFAULT,
 };
 
@@ -182,8 +184,36 @@ export class BlinkDetector {
   private inBlink = false;
   private blinkStartedAt = 0;
   private lastEventAt = 0;
+  private recentDurations: number[] = [];
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
+
+  /** Dot/dash from duration vs recent blink lengths (not fixed ms). */
+  private classifyDuration(durationMs: number): BlinkSymbol {
+    if (this.recentDurations.length === 0) {
+      this.pushRecent(durationMs);
+      return 'dot';
+    }
+
+    const baseline = this.dotBaseline();
+    const symbol: BlinkSymbol =
+      durationMs < baseline * this.config.dashRatio ? 'dot' : 'dash';
+    this.pushRecent(durationMs);
+    return symbol;
+  }
+
+  private dotBaseline(): number {
+    const sorted = [...this.recentDurations].sort((a, b) => a - b);
+    const idx = Math.max(0, Math.floor(sorted.length * 0.3));
+    return sorted[idx] ?? sorted[0];
+  }
+
+  private pushRecent(durationMs: number): void {
+    this.recentDurations.push(durationMs);
+    if (this.recentDurations.length > RECENT_DURATION_CAP) {
+      this.recentDurations.shift();
+    }
+  }
 
   /** One or both eyes: short close = dot, long close = dash. */
   update(leftEar: number, rightEar: number, now = performance.now()): BlinkEvent | null {
@@ -205,7 +235,7 @@ export class BlinkDetector {
 
       this.lastEventAt = now;
       return {
-        symbol: durationMs <= this.config.dotMaxMs ? 'dot' : 'dash',
+        symbol: this.classifyDuration(durationMs),
         durationMs,
       };
     }
@@ -215,6 +245,10 @@ export class BlinkDetector {
 
   setConfig(config: Partial<BlinkDetectorConfig>): void {
     this.config = { ...this.config, ...config };
+  }
+
+  resetDurationHistory(): void {
+    this.recentDurations = [];
   }
 
   getConfig(): BlinkDetectorConfig {

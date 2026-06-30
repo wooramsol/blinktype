@@ -58,33 +58,20 @@ function upperEyelidArc(connections: Connection[], landmarks: Point2D[]): Connec
   return arcAvgY(landmarks, a) < arcAvgY(landmarks, b) ? a : b;
 }
 
-/** Lower eyelid = arc with larger average y (lower on the face). */
-function lowerEyelidArc(connections: Connection[], landmarks: Point2D[]): Connection[] {
-  const [a, b] = splitEyeArcs(connections);
-  return arcAvgY(landmarks, a) > arcAvgY(landmarks, b) ? a : b;
-}
-
-function eyelidContours(landmarks: Point2D[]): Connection[] {
+function upperEyelidContours(landmarks: Point2D[]): Connection[] {
   return [
     ...upperEyelidArc(MP_EYE_A, landmarks),
-    ...lowerEyelidArc(MP_EYE_A, landmarks),
     ...upperEyelidArc(MP_EYE_B, landmarks),
-    ...lowerEyelidArc(MP_EYE_B, landmarks),
   ];
 }
 
-function eyelidArcs(landmarks: Point2D[]): Connection[][] {
-  return [
-    upperEyelidArc(MP_EYE_A, landmarks),
-    lowerEyelidArc(MP_EYE_A, landmarks),
-    upperEyelidArc(MP_EYE_B, landmarks),
-    lowerEyelidArc(MP_EYE_B, landmarks),
-  ];
+function upperEyelidArcs(landmarks: Point2D[]): Connection[][] {
+  return [upperEyelidArc(MP_EYE_A, landmarks), upperEyelidArc(MP_EYE_B, landmarks)];
 }
 
 function expandedLandmarks(landmarks: Point2D[]): Map<number, Point2D> {
   const out = new Map<number, Point2D>();
-  for (const arc of eyelidArcs(landmarks)) {
+  for (const arc of upperEyelidArcs(landmarks)) {
     const indices = uniqueIndices(arc);
     const expanded = expandLandmarkRegion(landmarks, indices, EYE_OVERLAY_EXPAND);
     for (const [i, p] of expanded) out.set(i, p);
@@ -166,7 +153,7 @@ export function drawFaceOverlay(
   const h = ctx.canvas.height;
   ctx.clearRect(0, 0, w, h);
 
-  const eyelids = eyelidContours(landmarks);
+  const eyelids = upperEyelidContours(landmarks);
   const eyelidIndices = uniqueIndices(eyelids);
   const expanded = expandedLandmarks(landmarks);
 
