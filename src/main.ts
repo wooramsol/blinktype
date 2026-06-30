@@ -78,6 +78,7 @@ app.innerHTML = `
         <canvas id="overlay"></canvas>
       </div>
       <div id="ear-label" class="ear-label ear-hud-left" hidden>E —</div>
+      <div id="dot-label" class="ear-label ear-hud-right" hidden>· —</div>
     </div>
     <textarea id="output" rows="8" spellcheck="false"></textarea>
   </div>
@@ -89,6 +90,7 @@ const overlay = document.querySelector<HTMLCanvasElement>('#overlay')!;
 const overlayCtx = overlay.getContext('2d')!;
 const output = document.querySelector<HTMLTextAreaElement>('#output')!;
 const earLabel = document.querySelector<HTMLDivElement>('#ear-label')!;
+const dotLabel = document.querySelector<HTMLDivElement>('#dot-label')!;
 const dotMaxMsInput = document.querySelector<HTMLInputElement>('#dot-max-ms')!;
 const dotMaxMsVal = document.querySelector<HTMLSpanElement>('#dot-max-ms-val')!;
 const letterGapMsInput = document.querySelector<HTMLInputElement>('#letter-gap-ms')!;
@@ -254,6 +256,7 @@ const morseMachine = new MorseStateMachine(
   (event: MorseCommitEvent) => {
     committedText += event.char.toLowerCase();
     morseAudio.playMorse(event.morse);
+    updateDotLabelText();
     syncOutput();
   },
 );
@@ -277,22 +280,32 @@ function backspaceOutput(): void {
   syncOutput();
 }
 
-function positionEarLabel(landmarks: { x: number; y: number }[]): void {
+function updateDotLabelText(): void {
+  const avg = morseMachine.getAverageDotMs();
+  dotLabel.textContent = avg === null ? '· —' : `· ${Math.round(avg)}ms`;
+}
+
+function positionHudLabels(landmarks: { x: number; y: number }[]): void {
   const w = videoWrap.clientWidth;
   const h = videoWrap.clientHeight;
   if (w === 0 || h === 0) return;
 
   const ear = averageEar(landmarks);
-  const { screenLeft } = selfieEarHudPixels(landmarks, w, h);
+  const { screenLeft, screenRight } = selfieEarHudPixels(landmarks, w, h);
 
   earLabel.textContent = `E ${ear.toFixed(3)}`;
   earLabel.style.left = `${screenLeft.x}px`;
   earLabel.style.top = `${screenLeft.y}px`;
   earLabel.hidden = false;
+
+  dotLabel.style.left = `${screenRight.x}px`;
+  dotLabel.style.top = `${screenRight.y}px`;
+  dotLabel.hidden = false;
 }
 
-function hideEarLabel(): void {
+function hideHudLabels(): void {
   earLabel.hidden = true;
+  dotLabel.hidden = true;
 }
 
 function isVideoLive(): boolean {
@@ -350,7 +363,7 @@ async function loop(): Promise<void> {
       resizeOverlayCanvas(overlay, video);
       drawFaceOverlay(overlayCtx, frame.landmarks);
 
-      positionEarLabel(frame.landmarks);
+      positionHudLabels(frame.landmarks);
 
       const eyes = selfieScreenEyes(frame.landmarks);
       const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
@@ -360,7 +373,7 @@ async function loop(): Promise<void> {
         backspaceOutput();
       }
     } else {
-      hideEarLabel();
+      hideHudLabels();
       clearFaceOverlay(overlayCtx);
     }
 

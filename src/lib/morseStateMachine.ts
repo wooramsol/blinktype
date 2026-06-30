@@ -1,6 +1,6 @@
 import { decodeMorse } from './morse';
 import type { BlinkEvent } from './eyeBlink';
-import { durationsToMorse, nextDotBaseline } from './morseClassify';
+import { durationsToMorse, dotDurationsFromMorse, nextDotBaseline } from './morseClassify';
 import { DASH_RATIO_DEFAULT, MORSE_LETTER_GAP_MS } from './morseTiming';
 
 export interface MorseTimingConfig {
@@ -17,11 +17,13 @@ export interface MorseCommitEvent {
   type: 'letter' | 'unknown';
   morse: string;
   char: string;
+  dotDurationsMs: number[];
 }
 
 export class MorseStateMachine {
   private durations: number[] = [];
   private priorDotBaseline: number | undefined;
+  private dotSamples: number[] = [];
   /** When > 0, commit the buffer once performance.now() reaches this time. */
   private letterDeadline = 0;
 
@@ -51,6 +53,10 @@ export class MorseStateMachine {
       this.timing.dashRatio,
       this.priorDotBaseline,
     );
+    const dotDurationsMs = dotDurationsFromMorse(this.durations, morse);
+    for (const ms of dotDurationsMs) {
+      this.dotSamples.push(ms);
+    }
     this.priorDotBaseline = nextDotBaseline(
       this.durations,
       morse,
@@ -61,9 +67,9 @@ export class MorseStateMachine {
 
     const decoded = decodeMorse(morse);
     if (decoded) {
-      this.onCommit({ type: 'letter', morse, char: decoded });
+      this.onCommit({ type: 'letter', morse, char: decoded, dotDurationsMs });
     } else {
-      this.onCommit({ type: 'unknown', morse, char: '?' });
+      this.onCommit({ type: 'unknown', morse, char: '?', dotDurationsMs });
     }
   }
 
@@ -81,6 +87,12 @@ export class MorseStateMachine {
 
   hasPendingLetter(): boolean {
     return this.durations.length > 0;
+  }
+
+  getAverageDotMs(): number | null {
+    if (this.dotSamples.length === 0) return null;
+    const sum = this.dotSamples.reduce((a, b) => a + b, 0);
+    return sum / this.dotSamples.length;
   }
 
   setTiming(timing: Partial<MorseTimingConfig>): void {

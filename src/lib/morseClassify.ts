@@ -34,6 +34,11 @@ export function durationsToMorse(
     .join('');
 }
 
+/** Durations classified as dots within a committed letter. */
+export function dotDurationsFromMorse(durations: number[], morse: string): number[] {
+  return durations.filter((_, i) => morse[i] === '.');
+}
+
 /** Update dot baseline from classified morse + raw durations. */
 export function nextDotBaseline(
   durations: number[],
