@@ -5,7 +5,6 @@ import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/fa
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import {
   MorseStateMachine,
-  morseToDisplay,
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
 import { MorseAudio } from './lib/morseAudio';
@@ -79,6 +78,7 @@ app.innerHTML = `
         <canvas id="overlay"></canvas>
       </div>
       <div id="ear-label" class="ear-label ear-hud-left" hidden>E —</div>
+      <div id="dot-label" class="ear-label ear-hud-right" hidden>· —</div>
     </div>
     <textarea id="output" rows="8" spellcheck="false"></textarea>
   </div>
@@ -90,6 +90,7 @@ const overlay = document.querySelector<HTMLCanvasElement>('#overlay')!;
 const overlayCtx = overlay.getContext('2d')!;
 const output = document.querySelector<HTMLTextAreaElement>('#output')!;
 const earLabel = document.querySelector<HTMLDivElement>('#ear-label')!;
+const dotLabel = document.querySelector<HTMLDivElement>('#dot-label')!;
 const dotMaxMsInput = document.querySelector<HTMLInputElement>('#dot-max-ms')!;
 const dotMaxMsVal = document.querySelector<HTMLSpanElement>('#dot-max-ms-val')!;
 const letterGapMsInput = document.querySelector<HTMLInputElement>('#letter-gap-ms')!;
@@ -165,11 +166,10 @@ const blinkDetector = new BlinkDetector();
 const initialDashRatioSlider = loadSavedDashRatioSlider();
 dotMaxMsInput.value = String(initialDashRatioSlider);
 dotMaxMsVal.textContent = formatDashRatioSlider(initialDashRatioSlider);
-blinkDetector.setConfig({ dashRatio: sliderToDashRatio(initialDashRatioSlider) });
 dotMaxMsInput.addEventListener('input', () => {
   const v = Number(dotMaxMsInput.value);
   dotMaxMsVal.textContent = formatDashRatioSlider(v);
-  blinkDetector.setConfig({ dashRatio: sliderToDashRatio(v) });
+  morseMachine.setTiming({ dashRatio: sliderToDashRatio(v) });
   localStorage.setItem(DOT_MAX_MS_KEY, String(v));
 });
 
@@ -218,11 +218,9 @@ bindMsSlider(
 const headShakeDetector = new HeadShakeDetector();
 const morseAudio = new MorseAudio();
 let committedText = '';
-let pendingBuffer = '';
 
 function displayValue(): string {
-  const spaced = committedText ? formatCommittedText(committedText) : '';
-  return spaced + (pendingBuffer ? morseToDisplay(pendingBuffer) : '');
+  return committedText ? formatCommittedText(committedText) : '';
 }
 
 function parseCommittedDisplay(display: string): string {
@@ -236,45 +234,29 @@ function syncOutput(): void {
   const selStart = output.selectionStart ?? next.length;
   const selEnd = output.selectionEnd ?? next.length;
   const hadFocus = document.activeElement === output;
-  const pendingDisplay = pendingBuffer ? morseToDisplay(pendingBuffer) : '';
-  const editingCommitted =
-    hadFocus && pendingDisplay && selEnd <= output.value.length - pendingDisplay.length;
 
   output.value = next;
   output.scrollTop = output.scrollHeight;
 
   if (hadFocus) {
-    if (editingCommitted) {
-      output.setSelectionRange(selStart, selEnd);
-    } else {
-      output.setSelectionRange(next.length, next.length);
-    }
+    output.setSelectionRange(selStart, selEnd);
   }
 }
 
 function onUserEdit(): void {
-  const pendingDisplay = pendingBuffer ? morseToDisplay(pendingBuffer) : '';
-  const val = output.value;
-
-  if (pendingDisplay && val.endsWith(pendingDisplay)) {
-    committedText = parseCommittedDisplay(val.slice(0, -pendingDisplay.length));
-    return;
-  }
-
-  committedText = parseCommittedDisplay(val);
-  pendingBuffer = '';
+  committedText = parseCommittedDisplay(output.value);
   morseMachine.reset();
 }
 
 const morseMachine = new MorseStateMachine(
-  { letterGapMs: initialLetterGapMs },
+  {
+    letterGapMs: initialLetterGapMs,
+    dashRatio: sliderToDashRatio(initialDashRatioSlider),
+  },
   (event: MorseCommitEvent) => {
     committedText += event.char.toLowerCase();
-    pendingBuffer = '';
-    syncOutput();
-  },
-  (buffer) => {
-    pendingBuffer = buffer;
+    morseAudio.playMorse(event.morse);
+    updateDotLabelText();
     syncOutput();
   },
 );
@@ -290,8 +272,7 @@ bindMsSlider(
 );
 
 function backspaceOutput(): void {
-  if (pendingBuffer) {
-    pendingBuffer = '';
+  if (morseMachine.hasPendingLetter()) {
     morseMachine.reset();
   } else if (committedText.length > 0) {
     committedText = committedText.slice(0, -1);
@@ -299,22 +280,32 @@ function backspaceOutput(): void {
   syncOutput();
 }
 
-function positionEarLabel(landmarks: { x: number; y: number }[]): void {
+function updateDotLabelText(): void {
+  const avg = morseMachine.getAverageDotMs();
+  dotLabel.textContent = avg === null ? '· —' : `· ${Math.round(avg)}ms`;
+}
+
+function positionHudLabels(landmarks: { x: number; y: number }[]): void {
   const w = videoWrap.clientWidth;
   const h = videoWrap.clientHeight;
   if (w === 0 || h === 0) return;
 
   const ear = averageEar(landmarks);
-  const { screenLeft } = selfieEarHudPixels(landmarks, w, h);
+  const { screenLeft, screenRight } = selfieEarHudPixels(landmarks, w, h);
 
   earLabel.textContent = `E ${ear.toFixed(3)}`;
   earLabel.style.left = `${screenLeft.x}px`;
   earLabel.style.top = `${screenLeft.y}px`;
   earLabel.hidden = false;
+
+  dotLabel.style.left = `${screenRight.x}px`;
+  dotLabel.style.top = `${screenRight.y}px`;
+  dotLabel.hidden = false;
 }
 
-function hideEarLabel(): void {
+function hideHudLabels(): void {
   earLabel.hidden = true;
+  dotLabel.hidden = true;
 }
 
 function isVideoLive(): boolean {
@@ -372,18 +363,17 @@ async function loop(): Promise<void> {
       resizeOverlayCanvas(overlay, video);
       drawFaceOverlay(overlayCtx, frame.landmarks);
 
-      positionEarLabel(frame.landmarks);
+      positionHudLabels(frame.landmarks);
 
       const eyes = selfieScreenEyes(frame.landmarks);
       const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
       if (blink) {
-        morseAudio.play(blink.symbol);
         morseMachine.onBlink(blink, now);
       } else if (headShakeDetector.update(noseOffsetX(frame.landmarks), now)) {
         backspaceOutput();
       }
     } else {
-      hideEarLabel();
+      hideHudLabels();
       clearFaceOverlay(overlayCtx);
     }
 
