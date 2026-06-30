@@ -5,6 +5,7 @@ import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/fa
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
 import {
   MorseStateMachine,
+  morseToDisplay,
   type MorseCommitEvent,
 } from './lib/morseStateMachine';
 import { MorseAudio } from './lib/morseAudio';
@@ -13,12 +14,8 @@ import {
   COOLDOWN_MS_SLIDER_MAX,
   COOLDOWN_MS_SLIDER_MIN,
   COOLDOWN_MS_SLIDER_STEP,
-  DASH_RATIO_SLIDER_MAX,
-  DASH_RATIO_SLIDER_MIN,
-  DASH_RATIO_SLIDER_STEP,
-  DASH_RATIO_DEFAULT,
-  dashRatioToSlider,
-  sliderToDashRatio,
+  DOT_MAX_MS_SLIDER_MAX,
+  DOT_MAX_MS_SLIDER_MIN,
   EAR_CLOSED_DEFAULT,
   EAR_CLOSED_SLIDER_MAX,
   EAR_CLOSED_SLIDER_MIN,
@@ -31,6 +28,7 @@ import {
   MIN_BLINK_MS_SLIDER_MAX,
   MIN_BLINK_MS_SLIDER_MIN,
   MIN_BLINK_MS_SLIDER_STEP,
+  MORSE_DOT_DASH_THRESHOLD_MS,
   MORSE_LETTER_GAP_MS,
 } from './lib/morseTiming';
 import { formatCommittedText, lettersOnly } from './lib/wordSegment';
@@ -48,9 +46,9 @@ app.innerHTML = `
     <div id="video-wrap" class="video-wrap">
       <div class="video-controls">
         <div class="timing-control">
-          <label for="dot-max-ms">·/− ×</label>
-          <input type="range" id="dot-max-ms" min="${DASH_RATIO_SLIDER_MIN}" max="${DASH_RATIO_SLIDER_MAX}" step="${DASH_RATIO_SLIDER_STEP}" value="${dashRatioToSlider(DASH_RATIO_DEFAULT)}" />
-          <span id="dot-max-ms-val" class="timing-val">${DASH_RATIO_DEFAULT.toFixed(1)}</span>
+          <label for="dot-max-ms">·/− ms</label>
+          <input type="range" id="dot-max-ms" min="${DOT_MAX_MS_SLIDER_MIN}" max="${DOT_MAX_MS_SLIDER_MAX}" step="10" value="${MORSE_DOT_DASH_THRESHOLD_MS}" />
+          <span id="dot-max-ms-val" class="timing-val">${MORSE_DOT_DASH_THRESHOLD_MS}</span>
         </div>
         <div class="timing-control">
           <label for="letter-gap-ms">letter ms</label>
@@ -78,7 +76,6 @@ app.innerHTML = `
         <canvas id="overlay"></canvas>
       </div>
       <div id="ear-label" class="ear-label ear-hud-left" hidden>E —</div>
-      <div id="dot-label" class="ear-label ear-hud-right" hidden>· —</div>
     </div>
     <textarea id="output" rows="8" spellcheck="false"></textarea>
   </div>
@@ -90,7 +87,6 @@ const overlay = document.querySelector<HTMLCanvasElement>('#overlay')!;
 const overlayCtx = overlay.getContext('2d')!;
 const output = document.querySelector<HTMLTextAreaElement>('#output')!;
 const earLabel = document.querySelector<HTMLDivElement>('#ear-label')!;
-const dotLabel = document.querySelector<HTMLDivElement>('#dot-label')!;
 const dotMaxMsInput = document.querySelector<HTMLInputElement>('#dot-max-ms')!;
 const dotMaxMsVal = document.querySelector<HTMLSpanElement>('#dot-max-ms-val')!;
 const letterGapMsInput = document.querySelector<HTMLInputElement>('#letter-gap-ms')!;
@@ -146,32 +142,16 @@ const COOLDOWN_MS_KEY = 'blinktype-cooldownMs';
 const MIN_BLINK_MS_KEY = 'blinktype-minBlinkMs';
 const EAR_CLOSED_KEY = 'blinktype-earClosed';
 
-function loadSavedDashRatioSlider(): number {
-  const saved = Number(localStorage.getItem(DOT_MAX_MS_KEY));
-  if (
-    Number.isFinite(saved) &&
-    saved >= DASH_RATIO_SLIDER_MIN &&
-    saved <= DASH_RATIO_SLIDER_MAX
-  ) {
-    return saved;
-  }
-  return dashRatioToSlider(DASH_RATIO_DEFAULT);
-}
-
-function formatDashRatioSlider(sliderVal: number): string {
-  return sliderToDashRatio(sliderVal).toFixed(1);
-}
-
 const blinkDetector = new BlinkDetector();
-const initialDashRatioSlider = loadSavedDashRatioSlider();
-dotMaxMsInput.value = String(initialDashRatioSlider);
-dotMaxMsVal.textContent = formatDashRatioSlider(initialDashRatioSlider);
-dotMaxMsInput.addEventListener('input', () => {
-  const v = Number(dotMaxMsInput.value);
-  dotMaxMsVal.textContent = formatDashRatioSlider(v);
-  morseMachine.setTiming({ dashRatio: sliderToDashRatio(v) });
-  localStorage.setItem(DOT_MAX_MS_KEY, String(v));
-});
+bindMsSlider(
+  dotMaxMsInput,
+  dotMaxMsVal,
+  DOT_MAX_MS_KEY,
+  DOT_MAX_MS_SLIDER_MIN,
+  DOT_MAX_MS_SLIDER_MAX,
+  MORSE_DOT_DASH_THRESHOLD_MS,
+  (ms) => blinkDetector.setConfig({ dotMaxMs: ms }),
+);
 
 const initialLetterGapMs = loadSavedMs(
   LETTER_GAP_MS_KEY,
@@ -218,9 +198,11 @@ bindMsSlider(
 const headShakeDetector = new HeadShakeDetector();
 const morseAudio = new MorseAudio();
 let committedText = '';
+let pendingBuffer = '';
 
 function displayValue(): string {
-  return committedText ? formatCommittedText(committedText) : '';
+  const spaced = committedText ? formatCommittedText(committedText) : '';
+  return spaced + (pendingBuffer ? morseToDisplay(pendingBuffer) : '');
 }
 
 function parseCommittedDisplay(display: string): string {
@@ -234,29 +216,45 @@ function syncOutput(): void {
   const selStart = output.selectionStart ?? next.length;
   const selEnd = output.selectionEnd ?? next.length;
   const hadFocus = document.activeElement === output;
+  const pendingDisplay = pendingBuffer ? morseToDisplay(pendingBuffer) : '';
+  const editingCommitted =
+    hadFocus && pendingDisplay && selEnd <= output.value.length - pendingDisplay.length;
 
   output.value = next;
   output.scrollTop = output.scrollHeight;
 
   if (hadFocus) {
-    output.setSelectionRange(selStart, selEnd);
+    if (editingCommitted) {
+      output.setSelectionRange(selStart, selEnd);
+    } else {
+      output.setSelectionRange(next.length, next.length);
+    }
   }
 }
 
 function onUserEdit(): void {
-  committedText = parseCommittedDisplay(output.value);
+  const pendingDisplay = pendingBuffer ? morseToDisplay(pendingBuffer) : '';
+  const val = output.value;
+
+  if (pendingDisplay && val.endsWith(pendingDisplay)) {
+    committedText = parseCommittedDisplay(val.slice(0, -pendingDisplay.length));
+    return;
+  }
+
+  committedText = parseCommittedDisplay(val);
+  pendingBuffer = '';
   morseMachine.reset();
 }
 
 const morseMachine = new MorseStateMachine(
-  {
-    letterGapMs: initialLetterGapMs,
-    dashRatio: sliderToDashRatio(initialDashRatioSlider),
-  },
+  { letterGapMs: initialLetterGapMs },
   (event: MorseCommitEvent) => {
     committedText += event.char.toLowerCase();
-    morseAudio.playMorse(event.morse);
-    updateDotLabelText();
+    pendingBuffer = '';
+    syncOutput();
+  },
+  (buffer) => {
+    pendingBuffer = buffer;
     syncOutput();
   },
 );
@@ -272,7 +270,8 @@ bindMsSlider(
 );
 
 function backspaceOutput(): void {
-  if (morseMachine.hasPendingLetter()) {
+  if (pendingBuffer) {
+    pendingBuffer = '';
     morseMachine.reset();
   } else if (committedText.length > 0) {
     committedText = committedText.slice(0, -1);
@@ -280,32 +279,22 @@ function backspaceOutput(): void {
   syncOutput();
 }
 
-function updateDotLabelText(): void {
-  const avg = morseMachine.getAverageDotMs();
-  dotLabel.textContent = avg === null ? '· —' : `· ${Math.round(avg)}ms`;
-}
-
-function positionHudLabels(landmarks: { x: number; y: number }[]): void {
+function positionEarLabel(landmarks: { x: number; y: number }[]): void {
   const w = videoWrap.clientWidth;
   const h = videoWrap.clientHeight;
   if (w === 0 || h === 0) return;
 
   const ear = averageEar(landmarks);
-  const { screenLeft, screenRight } = selfieEarHudPixels(landmarks, w, h);
+  const { screenLeft } = selfieEarHudPixels(landmarks, w, h);
 
   earLabel.textContent = `E ${ear.toFixed(3)}`;
   earLabel.style.left = `${screenLeft.x}px`;
   earLabel.style.top = `${screenLeft.y}px`;
   earLabel.hidden = false;
-
-  dotLabel.style.left = `${screenRight.x}px`;
-  dotLabel.style.top = `${screenRight.y}px`;
-  dotLabel.hidden = false;
 }
 
-function hideHudLabels(): void {
+function hideEarLabel(): void {
   earLabel.hidden = true;
-  dotLabel.hidden = true;
 }
 
 function isVideoLive(): boolean {
@@ -363,17 +352,18 @@ async function loop(): Promise<void> {
       resizeOverlayCanvas(overlay, video);
       drawFaceOverlay(overlayCtx, frame.landmarks);
 
-      positionHudLabels(frame.landmarks);
+      positionEarLabel(frame.landmarks);
 
       const eyes = selfieScreenEyes(frame.landmarks);
       const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
       if (blink) {
+        morseAudio.play(blink.symbol);
         morseMachine.onBlink(blink, now);
       } else if (headShakeDetector.update(noseOffsetX(frame.landmarks), now)) {
         backspaceOutput();
       }
     } else {
-      hideHudLabels();
+      hideEarLabel();
       clearFaceOverlay(overlayCtx);
     }
 

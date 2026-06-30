@@ -17,20 +17,6 @@ type Connection = { start: number; end: number };
 const MP_EYE_A = FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE;
 const MP_EYE_B = FaceLandmarker.FACE_LANDMARKS_LEFT_EYE;
 
-/** Lower brow arc (eye-facing edge) per side — not the full eyebrow. */
-const LOWER_EYEBROW_CONTOURS: Connection[] = [
-  { start: 70, end: 63 },
-  { start: 63, end: 105 },
-  { start: 105, end: 66 },
-  { start: 66, end: 107 },
-  { start: 300, end: 293 },
-  { start: 293, end: 334 },
-  { start: 334, end: 296 },
-  { start: 296, end: 336 },
-];
-
-const LOWER_BROW_INDICES = uniqueIndices(LOWER_EYEBROW_CONTOURS);
-
 function uniqueIndices(connections: Connection[]): number[] {
   const set = new Set<number>();
   for (const { start, end } of connections) {
@@ -164,14 +150,10 @@ export function drawFaceOverlay(
   drawEyeGrid(ctx, eyeGridPoints(MP_EYE_B, landmarks), w, h);
 
   drawConnections(ctx, landmarks, eyelids, w, h, '#fff', 1, expanded);
-  drawConnections(ctx, landmarks, LOWER_EYEBROW_CONTOURS, w, h, '#fff', 1);
 
   for (const i of eyelidIndices) {
     const p = expanded.get(i) ?? landmarks[i];
     drawPoint(ctx, p, w, h, '#fff', 2);
-  }
-  for (const i of LOWER_BROW_INDICES) {
-    drawPoint(ctx, landmarks[i], w, h, '#fff', 2);
   }
 
   ctx.restore();
