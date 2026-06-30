@@ -6,6 +6,10 @@ import {
 } from './eyeBlink';
 
 const OVERLAY_OPACITY = 0.5;
+const EYE_GRID_COLS = 4;
+const EYE_GRID_ROWS = 3;
+/** Expand eye bbox before drawing the surrounding grid. */
+const EYE_GRID_PAD = 0.4;
 
 type Connection = { start: number; end: number };
 
@@ -24,16 +28,6 @@ const LOWER_EYEBROW_CONTOURS: Connection[] = [
   { start: 334, end: 296 },
   { start: 296, end: 336 },
 ];
-
-const INNER_LIP_INDICES = new Set([
-  78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308,
-  191, 80, 81, 82, 13, 312, 311, 310, 415,
-]);
-
-const INNER_LIP_CONTOURS: Connection[] = FaceLandmarker.FACE_LANDMARKS_LIPS.filter(
-  (connection) =>
-    INNER_LIP_INDICES.has(connection.start) && INNER_LIP_INDICES.has(connection.end),
-);
 
 const LOWER_BROW_INDICES = uniqueIndices(LOWER_EYEBROW_CONTOURS);
 
@@ -58,28 +52,98 @@ function arcAvgY(landmarks: Point2D[], arc: Connection[]): number {
   return sum / (ids.length || 1);
 }
 
+/** Upper eyelid = arc with smaller average y (higher on the face). */
+function upperEyelidArc(connections: Connection[], landmarks: Point2D[]): Connection[] {
+  const [a, b] = splitEyeArcs(connections);
+  return arcAvgY(landmarks, a) < arcAvgY(landmarks, b) ? a : b;
+}
+
 /** Lower eyelid = arc with larger average y (lower on the face). */
 function lowerEyelidArc(connections: Connection[], landmarks: Point2D[]): Connection[] {
   const [a, b] = splitEyeArcs(connections);
   return arcAvgY(landmarks, a) > arcAvgY(landmarks, b) ? a : b;
 }
 
-function lowerEyelidContours(landmarks: Point2D[]): Connection[] {
+function eyelidContours(landmarks: Point2D[]): Connection[] {
   return [
+    ...upperEyelidArc(MP_EYE_A, landmarks),
     ...lowerEyelidArc(MP_EYE_A, landmarks),
+    ...upperEyelidArc(MP_EYE_B, landmarks),
     ...lowerEyelidArc(MP_EYE_B, landmarks),
   ];
 }
 
+function eyelidArcs(landmarks: Point2D[]): Connection[][] {
+  return [
+    upperEyelidArc(MP_EYE_A, landmarks),
+    lowerEyelidArc(MP_EYE_A, landmarks),
+    upperEyelidArc(MP_EYE_B, landmarks),
+    lowerEyelidArc(MP_EYE_B, landmarks),
+  ];
+}
+
 function expandedLandmarks(landmarks: Point2D[]): Map<number, Point2D> {
-  const arcs = [lowerEyelidArc(MP_EYE_A, landmarks), lowerEyelidArc(MP_EYE_B, landmarks)];
   const out = new Map<number, Point2D>();
-  for (const arc of arcs) {
+  for (const arc of eyelidArcs(landmarks)) {
     const indices = uniqueIndices(arc);
     const expanded = expandLandmarkRegion(landmarks, indices, EYE_OVERLAY_EXPAND);
     for (const [i, p] of expanded) out.set(i, p);
   }
   return out;
+}
+
+function eyeGridPoints(connections: Connection[], landmarks: Point2D[]): Point2D[] {
+  return uniqueIndices(connections).map((i) => landmarks[i]);
+}
+
+function drawEyeGrid(
+  ctx: CanvasRenderingContext2D,
+  points: Point2D[],
+  w: number,
+  h: number,
+): void {
+  if (points.length === 0) return;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of points) {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y);
+    maxY = Math.max(maxY, p.y);
+  }
+
+  const padX = (maxX - minX) * EYE_GRID_PAD;
+  const padY = (maxY - minY) * EYE_GRID_PAD;
+  minX -= padX;
+  maxX += padX;
+  minY -= padY;
+  maxY += padY;
+
+  ctx.save();
+  ctx.globalAlpha = OVERLAY_OPACITY * 0.45;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 0.75;
+
+  for (let c = 0; c <= EYE_GRID_COLS; c++) {
+    const x = (minX + ((maxX - minX) * c) / EYE_GRID_COLS) * w;
+    ctx.beginPath();
+    ctx.moveTo(x, minY * h);
+    ctx.lineTo(x, maxY * h);
+    ctx.stroke();
+  }
+
+  for (let r = 0; r <= EYE_GRID_ROWS; r++) {
+    const y = (minY + ((maxY - minY) * r) / EYE_GRID_ROWS) * h;
+    ctx.beginPath();
+    ctx.moveTo(minX * w, y);
+    ctx.lineTo(maxX * w, y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
 export function resizeOverlayCanvas(
@@ -102,16 +166,18 @@ export function drawFaceOverlay(
   const h = ctx.canvas.height;
   ctx.clearRect(0, 0, w, h);
 
-  const eyelids = lowerEyelidContours(landmarks);
+  const eyelids = eyelidContours(landmarks);
   const eyelidIndices = uniqueIndices(eyelids);
   const expanded = expandedLandmarks(landmarks);
 
   ctx.save();
   ctx.globalAlpha = OVERLAY_OPACITY;
 
+  drawEyeGrid(ctx, eyeGridPoints(MP_EYE_A, landmarks), w, h);
+  drawEyeGrid(ctx, eyeGridPoints(MP_EYE_B, landmarks), w, h);
+
   drawConnections(ctx, landmarks, eyelids, w, h, '#fff', 1, expanded);
   drawConnections(ctx, landmarks, LOWER_EYEBROW_CONTOURS, w, h, '#fff', 1);
-  drawConnections(ctx, landmarks, INNER_LIP_CONTOURS, w, h, '#fff', 1);
 
   for (const i of eyelidIndices) {
     const p = expanded.get(i) ?? landmarks[i];
