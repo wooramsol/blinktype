@@ -23,7 +23,7 @@ export const LETTER_GAP_MS_SLIDER_STEP = 50;
 
 /** Ignore blinks shorter than this (noise filter). */
 export const MIN_BLINK_MS_DEFAULT = Math.round(MORSE_UNIT_MS * 0.55);
-export const MIN_BLINK_MS_SLIDER_MIN = 20;
+export const MIN_BLINK_MS_SLIDER_MIN = 0;
 export const MIN_BLINK_MS_SLIDER_MAX = 150;
 export const MIN_BLINK_MS_SLIDER_STEP = 5;
 
