@@ -30,6 +30,15 @@ export interface TimingSnapshot {
   earClosed: number;
 }
 
+export interface PatternStats {
+  dotMs: number;
+  dashMs: number;
+  symbolGapMs: number;
+  letterGapMs: number;
+  blinkCount: number;
+  expectedSymbols: number;
+}
+
 export interface LetterAttempt {
   expected: string;
   expectedMorse: string;
@@ -44,7 +53,10 @@ export interface CalibrationRoundResult {
   allBlinks: BlinkEvent[];
   accuracy: number;
   tuning: TimingSnapshot;
+  pattern: PatternStats;
 }
+
+type SymbolSlot = { ch: '.' | '-'; letterIdx: number };
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -52,6 +64,244 @@ function clamp(n: number, min: number, max: number): number {
 
 function roundStep(n: number, step: number): number {
   return Math.round(n / step) * step;
+}
+
+function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = clamp(Math.floor(sorted.length * p), 0, sorted.length - 1);
+  return sorted[idx];
+}
+
+function avg(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function buildSymbolMap(word: string): SymbolSlot[] {
+  const out: SymbolSlot[] = [];
+  encodeWordMorse(word).forEach((morse, letterIdx) => {
+    for (const ch of morse) out.push({ ch: ch as '.' | '-', letterIdx });
+  });
+  return out;
+}
+
+function gapBetween(blinks: BlinkEvent[], i: number): number {
+  const endPrev = blinks[i].endedAt;
+  const startNext = blinks[i + 1].endedAt - blinks[i + 1].durationMs;
+  return Math.max(0, startNext - endPrev);
+}
+
+/** Assign blink durations to dot/dash using expected morse or duration clustering. */
+function classifyDurations(
+  blinks: BlinkEvent[],
+  symbolMap: SymbolSlot[],
+): { dotDurations: number[]; dashDurations: number[] } {
+  const dotDurations: number[] = [];
+  const dashDurations: number[] = [];
+
+  if (blinks.length === symbolMap.length) {
+    for (let i = 0; i < blinks.length; i++) {
+      if (symbolMap[i].ch === '.') dotDurations.push(blinks[i].durationMs);
+      else dashDurations.push(blinks[i].durationMs);
+    }
+    return { dotDurations, dashDurations };
+  }
+
+  const durations = blinks.map((b) => b.durationMs).sort((a, b) => a - b);
+  const expectedDots = symbolMap.filter((s) => s.ch === '.').length;
+  const expectedDashes = symbolMap.filter((s) => s.ch === '-').length;
+
+  if (durations.length >= 2 && expectedDots > 0 && expectedDashes > 0) {
+    let bestSplit = durations[0];
+    let bestScore = Infinity;
+    for (let i = 1; i < durations.length; i++) {
+      const split = (durations[i - 1] + durations[i]) / 2;
+      const short = durations.filter((d) => d <= split);
+      const long = durations.filter((d) => d > split);
+      const score =
+        Math.abs(short.length - expectedDots) + Math.abs(long.length - expectedDashes);
+      if (score < bestScore) {
+        bestScore = score;
+        bestSplit = split;
+      }
+    }
+    for (const d of durations) {
+      if (d <= bestSplit) dotDurations.push(d);
+      else dashDurations.push(d);
+    }
+    return { dotDurations, dashDurations };
+  }
+
+  for (let i = 0; i < Math.min(blinks.length, symbolMap.length); i++) {
+    if (symbolMap[i].ch === '.') dotDurations.push(blinks[i].durationMs);
+    else dashDurations.push(blinks[i].durationMs);
+  }
+  return { dotDurations, dashDurations };
+}
+
+function measureGaps(
+  blinks: BlinkEvent[],
+  symbolMap: SymbolSlot[],
+): { symbolGaps: number[]; letterGaps: number[] } {
+  const symbolGaps: number[] = [];
+  const letterGaps: number[] = [];
+
+  for (let i = 0; i < blinks.length - 1; i++) {
+    const gap = gapBetween(blinks, i);
+    const cur = symbolMap[Math.min(i, symbolMap.length - 1)];
+    const next = symbolMap[Math.min(i + 1, symbolMap.length - 1)];
+    if (!cur || !next) continue;
+
+    if (cur.letterIdx === next.letterIdx) symbolGaps.push(gap);
+    else letterGaps.push(gap);
+  }
+
+  return { symbolGaps, letterGaps };
+}
+
+export function analyzeBlinkPattern(
+  word: string,
+  blinks: BlinkEvent[],
+  baseline: TimingSnapshot,
+): { tuning: TimingSnapshot; pattern: PatternStats } {
+  const symbolMap = buildSymbolMap(word);
+  const emptyPattern: PatternStats = {
+    dotMs: 0,
+    dashMs: 0,
+    symbolGapMs: 0,
+    letterGapMs: 0,
+    blinkCount: blinks.length,
+    expectedSymbols: symbolMap.length,
+  };
+
+  if (blinks.length === 0) {
+    return { tuning: { ...baseline }, pattern: emptyPattern };
+  }
+
+  const { dotDurations, dashDurations } = classifyDurations(blinks, symbolMap);
+  const { symbolGaps, letterGaps } = measureGaps(blinks, symbolMap);
+
+  const dotMs = dotDurations.length ? Math.round(avg(dotDurations)) : 0;
+  const dashMs = dashDurations.length ? Math.round(avg(dashDurations)) : 0;
+  const symbolGapMs = symbolGaps.length ? Math.round(percentile(symbolGaps, 0.5)) : 0;
+  const measuredLetterGap = letterGaps.length ? Math.round(percentile(letterGaps, 0.5)) : 0;
+
+  let dotMaxMs = baseline.dotMaxMs;
+  if (dotDurations.length > 0 && dashDurations.length > 0) {
+    const dotRef = percentile(dotDurations, 0.75);
+    const dashRef = percentile(dashDurations, 0.25);
+    dotMaxMs = clamp(
+      roundStep((dotRef + dashRef) / 2, 10),
+      DOT_MAX_MS_SLIDER_MIN,
+      DOT_MAX_MS_SLIDER_MAX,
+    );
+  } else if (dotDurations.length > 1) {
+    dotMaxMs = clamp(
+      roundStep(percentile(dotDurations, 0.9) * 1.1, 10),
+      DOT_MAX_MS_SLIDER_MIN,
+      DOT_MAX_MS_SLIDER_MAX,
+    );
+  } else if (dashDurations.length > 1) {
+    dotMaxMs = clamp(
+      roundStep(percentile(dashDurations, 0.1) * 0.9, 10),
+      DOT_MAX_MS_SLIDER_MIN,
+      DOT_MAX_MS_SLIDER_MAX,
+    );
+  }
+
+  const minBlinkMs = dotDurations.length
+    ? clamp(
+        roundStep(Math.min(percentile(dotDurations, 0.1), dotMs * 0.7), 5),
+        MIN_BLINK_MS_SLIDER_MIN,
+        MIN_BLINK_MS_SLIDER_MAX,
+      )
+    : baseline.minBlinkMs;
+
+  const cooldownMs = symbolGaps.length
+    ? clamp(
+        roundStep(percentile(symbolGaps, 0.15) * 0.45, 10),
+        COOLDOWN_MS_SLIDER_MIN,
+        COOLDOWN_MS_SLIDER_MAX,
+      )
+    : baseline.cooldownMs;
+
+  let letterGapMs = baseline.letterGapMs;
+  if (measuredLetterGap > 0) {
+    letterGapMs = clamp(
+      roundStep(measuredLetterGap, LETTER_GAP_MS_SLIDER_STEP),
+      LETTER_GAP_MS_SLIDER_MIN,
+      LETTER_GAP_MS_SLIDER_MAX,
+    );
+  }
+
+  let earClosed = baseline.earClosed;
+  if (blinks.length < symbolMap.length) {
+    earClosed = clamp(earClosed + 12, EAR_CLOSED_SLIDER_MIN, EAR_CLOSED_SLIDER_MAX);
+  } else if (blinks.length > symbolMap.length) {
+    earClosed = clamp(earClosed - 8, EAR_CLOSED_SLIDER_MIN, EAR_CLOSED_SLIDER_MAX);
+  }
+
+  return {
+    tuning: { dotMaxMs, letterGapMs, cooldownMs, minBlinkMs, earClosed },
+    pattern: {
+      dotMs,
+      dashMs,
+      symbolGapMs,
+      letterGapMs: measuredLetterGap,
+      blinkCount: blinks.length,
+      expectedSymbols: symbolMap.length,
+    },
+  };
+}
+
+/** Blend measured timing into running calibration average. */
+export function mergeTimingSnapshots(
+  prev: TimingSnapshot,
+  next: TimingSnapshot,
+  roundIndex: number,
+): TimingSnapshot {
+  const w = 1 / roundIndex;
+  const blend = (a: number, b: number, step: number) =>
+    roundStep(a * (1 - w) + b * w, step);
+
+  return {
+    dotMaxMs: clamp(
+      blend(prev.dotMaxMs, next.dotMaxMs, 10),
+      DOT_MAX_MS_SLIDER_MIN,
+      DOT_MAX_MS_SLIDER_MAX,
+    ),
+    letterGapMs: clamp(
+      blend(prev.letterGapMs, next.letterGapMs, LETTER_GAP_MS_SLIDER_STEP),
+      LETTER_GAP_MS_SLIDER_MIN,
+      LETTER_GAP_MS_SLIDER_MAX,
+    ),
+    cooldownMs: clamp(
+      blend(prev.cooldownMs, next.cooldownMs, 10),
+      COOLDOWN_MS_SLIDER_MIN,
+      COOLDOWN_MS_SLIDER_MAX,
+    ),
+    minBlinkMs: clamp(
+      blend(prev.minBlinkMs, next.minBlinkMs, 5),
+      MIN_BLINK_MS_SLIDER_MIN,
+      MIN_BLINK_MS_SLIDER_MAX,
+    ),
+    earClosed: clamp(
+      Math.round(prev.earClosed * (1 - w) + next.earClosed * w),
+      EAR_CLOSED_SLIDER_MIN,
+      EAR_CLOSED_SLIDER_MAX,
+    ),
+  };
+}
+
+export function formatPatternStats(p: PatternStats): string {
+  const parts: string[] = [];
+  if (p.dotMs > 0) parts.push(`dot ${p.dotMs}ms`);
+  if (p.dashMs > 0) parts.push(`dash ${p.dashMs}ms`);
+  if (p.symbolGapMs > 0) parts.push(`sym gap ${p.symbolGapMs}ms`);
+  if (p.letterGapMs > 0) parts.push(`letter gap ${p.letterGapMs}ms`);
+  parts.push(`${p.blinkCount}/${p.expectedSymbols} blinks`);
+  return parts.join(' · ');
 }
 
 export function defaultTimingSnapshot(): TimingSnapshot {
@@ -73,109 +323,6 @@ export function openCalibrationTiming(): TimingSnapshot {
     minBlinkMs: MIN_BLINK_MS_SLIDER_MIN,
     earClosed: EAR_CLOSED_SLIDER_MAX,
   };
-}
-
-function alignedDurations(
-  blinks: BlinkEvent[],
-  word: string,
-): { dotDurations: number[]; dashDurations: number[] } {
-  const expected = encodeWordMorse(word).join('').split('');
-  const dotDurations: number[] = [];
-  const dashDurations: number[] = [];
-  const n = Math.min(blinks.length, expected.length);
-  for (let i = 0; i < n; i++) {
-    if (expected[i] === '.') dotDurations.push(blinks[i].durationMs);
-    else dashDurations.push(blinks[i].durationMs);
-  }
-  return { dotDurations, dashDurations };
-}
-
-export function computeTuning(
-  baseline: TimingSnapshot,
-  word: string,
-  attempts: LetterAttempt[],
-  allBlinks: BlinkEvent[],
-): TimingSnapshot {
-  const next = { ...baseline };
-
-  const { dotDurations, dashDurations } = alignedDurations(allBlinks, word);
-
-  if (dotDurations.length > 0 && dashDurations.length > 0) {
-    const maxDot = Math.max(...dotDurations);
-    const minDash = Math.min(...dashDurations);
-    if (minDash > maxDot) {
-      next.dotMaxMs = clamp(
-        roundStep((maxDot + minDash) / 2, 10),
-        DOT_MAX_MS_SLIDER_MIN,
-        DOT_MAX_MS_SLIDER_MAX,
-      );
-    } else {
-      const all = allBlinks.map((b) => b.durationMs).sort((a, b) => a - b);
-      const mid = all[Math.floor(all.length / 2)] ?? baseline.dotMaxMs;
-      next.dotMaxMs = clamp(roundStep(mid, 10), DOT_MAX_MS_SLIDER_MIN, DOT_MAX_MS_SLIDER_MAX);
-    }
-  } else if (dotDurations.length > 1) {
-    next.dotMaxMs = clamp(
-      roundStep(Math.max(...dotDurations) * 1.15, 10),
-      DOT_MAX_MS_SLIDER_MIN,
-      DOT_MAX_MS_SLIDER_MAX,
-    );
-  } else if (dashDurations.length > 1) {
-    next.dotMaxMs = clamp(
-      roundStep(Math.min(...dashDurations) * 0.85, 10),
-      DOT_MAX_MS_SLIDER_MIN,
-      DOT_MAX_MS_SLIDER_MAX,
-    );
-  }
-
-  const expectedSymbols = encodeWordMorse(word).join('').length;
-
-  if (allBlinks.length < expectedSymbols) {
-    next.cooldownMs = clamp(next.cooldownMs - 25, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
-    next.minBlinkMs = clamp(next.minBlinkMs - 8, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
-    next.earClosed = clamp(next.earClosed + 15, EAR_CLOSED_SLIDER_MIN, EAR_CLOSED_SLIDER_MAX);
-  } else if (allBlinks.length > expectedSymbols) {
-    next.cooldownMs = clamp(next.cooldownMs + 20, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
-    next.minBlinkMs = clamp(next.minBlinkMs + 8, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
-    next.earClosed = clamp(next.earClosed - 10, EAR_CLOSED_SLIDER_MIN, EAR_CLOSED_SLIDER_MAX);
-  }
-
-  for (const rec of attempts) {
-    if (rec.gotMorse.length > rec.expectedMorse.length) {
-      next.cooldownMs = clamp(next.cooldownMs + 15, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
-      next.minBlinkMs = clamp(next.minBlinkMs + 5, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
-    } else if (rec.gotMorse.length < rec.expectedMorse.length) {
-      next.cooldownMs = clamp(next.cooldownMs - 15, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
-      next.minBlinkMs = clamp(next.minBlinkMs - 5, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
-      next.earClosed = clamp(next.earClosed + 10, EAR_CLOSED_SLIDER_MIN, EAR_CLOSED_SLIDER_MAX);
-    }
-
-    if (rec.got === '?' || rec.got.toLowerCase() !== rec.expected) {
-      next.letterGapMs = clamp(
-        next.letterGapMs - 100,
-        LETTER_GAP_MS_SLIDER_MIN,
-        LETTER_GAP_MS_SLIDER_MAX,
-      );
-    }
-  }
-
-  const typed = attempts.map((a) => a.got.toLowerCase()).join('');
-  const target = word.toLowerCase();
-  if (typed.length < target.length) {
-    next.letterGapMs = clamp(
-      next.letterGapMs - 80,
-      LETTER_GAP_MS_SLIDER_MIN,
-      LETTER_GAP_MS_SLIDER_MAX,
-    );
-  } else if (typed === target) {
-    next.letterGapMs = clamp(
-      roundStep(next.letterGapMs, LETTER_GAP_MS_SLIDER_STEP),
-      LETTER_GAP_MS_SLIDER_MIN,
-      LETTER_GAP_MS_SLIDER_MAX,
-    );
-  }
-
-  return next;
 }
 
 export function roundAccuracy(word: string, attempts: LetterAttempt[]): number {
@@ -241,7 +388,7 @@ export class CalibrationSession {
   }
 
   hasAttempts(): boolean {
-    return this.attempts.length > 0;
+    return this.attempts.length > 0 || this.allBlinks.length > 0;
   }
 
   get roundNumber(): number {
@@ -291,13 +438,16 @@ export class CalibrationSession {
   finishRound(baseline: TimingSnapshot): CalibrationRoundResult {
     const word = this.currentWord;
     const accuracy = roundAccuracy(word, this.attempts);
-    const tuning = computeTuning(baseline, word, this.attempts, this.allBlinks);
+    const { tuning: measured, pattern } = analyzeBlinkPattern(word, this.allBlinks, baseline);
+    const roundIndex = this.rounds.length + 1;
+    const tuning = mergeTimingSnapshots(baseline, measured, roundIndex);
     const result: CalibrationRoundResult = {
       word,
       attempts: [...this.attempts],
       allBlinks: [...this.allBlinks],
       accuracy,
       tuning,
+      pattern,
     };
     this.rounds.push(result);
     this.wordIndex++;
