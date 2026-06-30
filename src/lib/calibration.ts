@@ -11,6 +11,7 @@ import {
   EAR_CLOSED_SLIDER_MIN,
   LETTER_GAP_MS_SLIDER_MAX,
   LETTER_GAP_MS_SLIDER_MIN,
+  LETTER_GAP_MS_SLIDER_STEP,
   MIN_BLINK_MS_DEFAULT,
   MIN_BLINK_MS_SLIDER_MAX,
   MIN_BLINK_MS_SLIDER_MIN,
@@ -63,64 +64,95 @@ export function defaultTimingSnapshot(): TimingSnapshot {
   };
 }
 
+/** Permissive detection during calibration — capture every blink. */
+export function openCalibrationTiming(): TimingSnapshot {
+  return {
+    dotMaxMs: DOT_MAX_MS_SLIDER_MAX,
+    letterGapMs: LETTER_GAP_MS_SLIDER_MAX,
+    cooldownMs: COOLDOWN_MS_SLIDER_MIN,
+    minBlinkMs: MIN_BLINK_MS_SLIDER_MIN,
+    earClosed: EAR_CLOSED_SLIDER_MAX,
+  };
+}
+
+function alignedDurations(
+  blinks: BlinkEvent[],
+  word: string,
+): { dotDurations: number[]; dashDurations: number[] } {
+  const expected = encodeWordMorse(word).join('').split('');
+  const dotDurations: number[] = [];
+  const dashDurations: number[] = [];
+  const n = Math.min(blinks.length, expected.length);
+  for (let i = 0; i < n; i++) {
+    if (expected[i] === '.') dotDurations.push(blinks[i].durationMs);
+    else dashDurations.push(blinks[i].durationMs);
+  }
+  return { dotDurations, dashDurations };
+}
+
 export function computeTuning(
-  current: TimingSnapshot,
+  baseline: TimingSnapshot,
   word: string,
   attempts: LetterAttempt[],
   allBlinks: BlinkEvent[],
 ): TimingSnapshot {
-  const next = { ...current };
+  const next = { ...baseline };
 
-  const dots = allBlinks.filter((b) => b.symbol === 'dot');
-  const dashes = allBlinks.filter((b) => b.symbol === 'dash');
+  const { dotDurations, dashDurations } = alignedDurations(allBlinks, word);
 
-  if (dots.length > 0 && dashes.length > 0) {
-    const maxDot = Math.max(...dots.map((b) => b.durationMs));
-    const minDash = Math.min(...dashes.map((b) => b.durationMs));
+  if (dotDurations.length > 0 && dashDurations.length > 0) {
+    const maxDot = Math.max(...dotDurations);
+    const minDash = Math.min(...dashDurations);
     if (minDash > maxDot) {
       next.dotMaxMs = clamp(
         roundStep((maxDot + minDash) / 2, 10),
         DOT_MAX_MS_SLIDER_MIN,
         DOT_MAX_MS_SLIDER_MAX,
       );
+    } else {
+      const all = allBlinks.map((b) => b.durationMs).sort((a, b) => a - b);
+      const mid = all[Math.floor(all.length / 2)] ?? baseline.dotMaxMs;
+      next.dotMaxMs = clamp(roundStep(mid, 10), DOT_MAX_MS_SLIDER_MIN, DOT_MAX_MS_SLIDER_MAX);
     }
+  } else if (dotDurations.length > 1) {
+    next.dotMaxMs = clamp(
+      roundStep(Math.max(...dotDurations) * 1.15, 10),
+      DOT_MAX_MS_SLIDER_MIN,
+      DOT_MAX_MS_SLIDER_MAX,
+    );
+  } else if (dashDurations.length > 1) {
+    next.dotMaxMs = clamp(
+      roundStep(Math.min(...dashDurations) * 0.85, 10),
+      DOT_MAX_MS_SLIDER_MIN,
+      DOT_MAX_MS_SLIDER_MAX,
+    );
   }
 
   const expectedSymbols = encodeWordMorse(word).join('').length;
 
   if (allBlinks.length < expectedSymbols) {
-    next.cooldownMs = clamp(next.cooldownMs - 20, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
-    next.minBlinkMs = clamp(next.minBlinkMs - 5, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
-    next.earClosed = clamp(next.earClosed + 12, EAR_CLOSED_SLIDER_MIN, EAR_CLOSED_SLIDER_MAX);
+    next.cooldownMs = clamp(next.cooldownMs - 25, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
+    next.minBlinkMs = clamp(next.minBlinkMs - 8, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
+    next.earClosed = clamp(next.earClosed + 15, EAR_CLOSED_SLIDER_MIN, EAR_CLOSED_SLIDER_MAX);
   } else if (allBlinks.length > expectedSymbols) {
-    next.cooldownMs = clamp(next.cooldownMs + 15, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
-    next.minBlinkMs = clamp(next.minBlinkMs + 5, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
+    next.cooldownMs = clamp(next.cooldownMs + 20, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
+    next.minBlinkMs = clamp(next.minBlinkMs + 8, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
+    next.earClosed = clamp(next.earClosed - 10, EAR_CLOSED_SLIDER_MIN, EAR_CLOSED_SLIDER_MAX);
   }
 
   for (const rec of attempts) {
     if (rec.gotMorse.length > rec.expectedMorse.length) {
-      next.cooldownMs = clamp(next.cooldownMs + 12, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
-      next.minBlinkMs = clamp(next.minBlinkMs + 4, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
+      next.cooldownMs = clamp(next.cooldownMs + 15, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
+      next.minBlinkMs = clamp(next.minBlinkMs + 5, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
     } else if (rec.gotMorse.length < rec.expectedMorse.length) {
-      next.cooldownMs = clamp(next.cooldownMs - 12, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
-      next.minBlinkMs = clamp(next.minBlinkMs - 4, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
-      next.earClosed = clamp(next.earClosed + 8, EAR_CLOSED_SLIDER_MIN, EAR_CLOSED_SLIDER_MAX);
-    }
-
-    const len = Math.min(rec.expectedMorse.length, rec.gotMorse.length);
-    for (let i = 0; i < len; i++) {
-      if (rec.expectedMorse[i] === rec.gotMorse[i]) continue;
-      if (rec.expectedMorse[i] === '.' && rec.gotMorse[i] === '-') {
-        next.dotMaxMs = clamp(next.dotMaxMs - 25, DOT_MAX_MS_SLIDER_MIN, DOT_MAX_MS_SLIDER_MAX);
-      }
-      if (rec.expectedMorse[i] === '-' && rec.gotMorse[i] === '.') {
-        next.dotMaxMs = clamp(next.dotMaxMs + 25, DOT_MAX_MS_SLIDER_MIN, DOT_MAX_MS_SLIDER_MAX);
-      }
+      next.cooldownMs = clamp(next.cooldownMs - 15, COOLDOWN_MS_SLIDER_MIN, COOLDOWN_MS_SLIDER_MAX);
+      next.minBlinkMs = clamp(next.minBlinkMs - 5, MIN_BLINK_MS_SLIDER_MIN, MIN_BLINK_MS_SLIDER_MAX);
+      next.earClosed = clamp(next.earClosed + 10, EAR_CLOSED_SLIDER_MIN, EAR_CLOSED_SLIDER_MAX);
     }
 
     if (rec.got === '?' || rec.got.toLowerCase() !== rec.expected) {
       next.letterGapMs = clamp(
-        next.letterGapMs + 80,
+        next.letterGapMs - 100,
         LETTER_GAP_MS_SLIDER_MIN,
         LETTER_GAP_MS_SLIDER_MAX,
       );
@@ -131,7 +163,13 @@ export function computeTuning(
   const target = word.toLowerCase();
   if (typed.length < target.length) {
     next.letterGapMs = clamp(
-      next.letterGapMs + 60,
+      next.letterGapMs - 80,
+      LETTER_GAP_MS_SLIDER_MIN,
+      LETTER_GAP_MS_SLIDER_MAX,
+    );
+  } else if (typed === target) {
+    next.letterGapMs = clamp(
+      roundStep(next.letterGapMs, LETTER_GAP_MS_SLIDER_STEP),
       LETTER_GAP_MS_SLIDER_MIN,
       LETTER_GAP_MS_SLIDER_MAX,
     );
@@ -176,8 +214,6 @@ export class CalibrationSession {
   private attempts: LetterAttempt[] = [];
   private letterBlinks: BlinkEvent[] = [];
   private allBlinks: BlinkEvent[] = [];
-  private typed = '';
-  private pendingMorse = '';
   private rounds: CalibrationRoundResult[] = [];
 
   constructor(private words: readonly string[] = CALIBRATION_WORDS) {}
@@ -204,10 +240,6 @@ export class CalibrationSession {
     return `letter ${this.letterIndex + 1}/${w.length}  ${exp}  ${morseToDisplay(expMorse)}`;
   }
 
-  get typedSoFar(): string {
-    return this.typed + (this.pendingMorse ? morseToDisplay(this.pendingMorse) : '');
-  }
-
   get roundNumber(): number {
     return this.wordIndex + 1;
   }
@@ -226,18 +258,12 @@ export class CalibrationSession {
     this.attempts = [];
     this.letterBlinks = [];
     this.allBlinks = [];
-    this.typed = '';
-    this.pendingMorse = '';
     this.rounds = [];
   }
 
   recordBlink(blink: BlinkEvent): void {
     this.letterBlinks.push(blink);
     this.allBlinks.push(blink);
-  }
-
-  onBufferChange(buffer: string): void {
-    this.pendingMorse = buffer;
   }
 
   onLetterCommit(got: string, gotMorse: string): boolean {
@@ -255,17 +281,15 @@ export class CalibrationSession {
       blinks: [...this.letterBlinks],
     });
     this.letterBlinks = [];
-    this.typed += got === '?' ? '?' : got.toLowerCase();
-    this.pendingMorse = '';
     this.letterIndex++;
 
     return this.letterIndex >= word.length;
   }
 
-  finishRound(currentTiming: TimingSnapshot): CalibrationRoundResult {
+  finishRound(baseline: TimingSnapshot): CalibrationRoundResult {
     const word = this.currentWord;
     const accuracy = roundAccuracy(word, this.attempts);
-    const tuning = computeTuning(currentTiming, word, this.attempts, this.allBlinks);
+    const tuning = computeTuning(baseline, word, this.attempts, this.allBlinks);
     const result: CalibrationRoundResult = {
       word,
       attempts: [...this.attempts],
@@ -279,8 +303,6 @@ export class CalibrationSession {
     this.attempts = [];
     this.letterBlinks = [];
     this.allBlinks = [];
-    this.typed = '';
-    this.pendingMorse = '';
     return result;
   }
 
