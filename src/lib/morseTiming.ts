@@ -11,23 +11,11 @@ export const MORSE_DASH_MS = MORSE_UNIT_MS * 3;
 export const MORSE_LETTER_GAP_MS = MORSE_UNIT_MS * 3;
 export const MORSE_WORD_GAP_MS = MORSE_UNIT_MS * 7;
 
-/** Default dash/dot length ratio threshold (relative, not absolute ms). */
-export const DASH_RATIO_DEFAULT = 2;
+/** Blink threshold: midpoint between dot (1u) and dash (3u) duration. */
+export const MORSE_DOT_DASH_THRESHOLD_MS = MORSE_UNIT_MS * 2;
 
-/** Slider stores ratio ×10 (15 = 1.5×, 35 = 3.5×). */
-export const DASH_RATIO_SLIDER_MIN = 15;
-export const DASH_RATIO_SLIDER_MAX = 35;
-export const DASH_RATIO_SLIDER_STEP = 1;
-
-export const sliderToDashRatio = (v: number): number => v / 10;
-export const dashRatioToSlider = (r: number): number => Math.round(r * 10);
-
-/** @deprecated legacy name — use DASH_RATIO_* */
-export const MORSE_DOT_DASH_THRESHOLD_MS = dashRatioToSlider(DASH_RATIO_DEFAULT);
-
-/** @deprecated legacy name */
-export const DOT_MAX_MS_SLIDER_MIN = DASH_RATIO_SLIDER_MIN;
-export const DOT_MAX_MS_SLIDER_MAX = DASH_RATIO_SLIDER_MAX;
+export const DOT_MAX_MS_SLIDER_MIN = MORSE_UNIT_MS;
+export const DOT_MAX_MS_SLIDER_MAX = MORSE_UNIT_MS * 6;
 
 export const LETTER_GAP_MS_SLIDER_MIN = MORSE_UNIT_MS;
 export const LETTER_GAP_MS_SLIDER_MAX = MORSE_UNIT_MS * 15;

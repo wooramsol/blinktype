@@ -1,4 +1,5 @@
 import {
+  MORSE_DOT_DASH_THRESHOLD_MS,
   MIN_BLINK_MS_DEFAULT,
   COOLDOWN_MS_DEFAULT,
   EAR_CLOSED_DEFAULT,
@@ -157,6 +158,8 @@ export interface BlinkDetectorConfig {
   rearmThreshold: number;
   /** Ignore blinks shorter than this (noise). */
   minBlinkMs: number;
+  /** Closed duration at or below this → dot; longer → dash. */
+  dotMaxMs: number;
   cooldownMs: number;
 }
 
@@ -164,10 +167,14 @@ export const DEFAULT_BLINK_CONFIG: BlinkDetectorConfig = {
   closedThreshold: EAR_CLOSED_DEFAULT / 1000,
   rearmThreshold: EAR_CLOSED_DEFAULT / 1000 + EAR_REARM_DELTA,
   minBlinkMs: MIN_BLINK_MS_DEFAULT,
+  dotMaxMs: MORSE_DOT_DASH_THRESHOLD_MS,
   cooldownMs: COOLDOWN_MS_DEFAULT,
 };
 
+export type BlinkSymbol = 'dot' | 'dash';
+
 export interface BlinkEvent {
+  symbol: BlinkSymbol;
   durationMs: number;
 }
 
@@ -178,7 +185,7 @@ export class BlinkDetector {
 
   constructor(private config: BlinkDetectorConfig = DEFAULT_BLINK_CONFIG) {}
 
-  /** One or both eyes closed long enough → blink duration (dot/dash decided per letter). */
+  /** One or both eyes: short close = dot, long close = dash. */
   update(leftEar: number, rightEar: number, now = performance.now()): BlinkEvent | null {
     const { closedThreshold, rearmThreshold } = this.config;
     const anyClosed = leftEar < closedThreshold || rightEar < closedThreshold;
@@ -197,7 +204,10 @@ export class BlinkDetector {
       if (now - this.lastEventAt < this.config.cooldownMs) return null;
 
       this.lastEventAt = now;
-      return { durationMs };
+      return {
+        symbol: durationMs <= this.config.dotMaxMs ? 'dot' : 'dash',
+        durationMs,
+      };
     }
 
     return null;
