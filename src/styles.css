@@ -53,6 +53,65 @@ body {
   white-space: nowrap;
 }
 
+.title-actions {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.calibrate-btn {
+  font: inherit;
+  font-size: 11px;
+  color: #fff;
+  background: #0a0a0a;
+  border: 1px solid #444;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.calibrate-btn:hover,
+.calibrate-btn.active {
+  border-color: #fff;
+}
+
+.calibration-hud {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid #555;
+  pointer-events: none;
+}
+
+.video-wrap.calibrating {
+  outline: 1px solid #888;
+  outline-offset: -1px;
+}
+
+.cal-target {
+  font-size: 1.6em;
+  letter-spacing: 0.08em;
+}
+
+.cal-morse {
+  font-size: 1.15em;
+  opacity: 0.9;
+}
+
+.cal-meta {
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.cal-typed {
+  font-size: 1.1em;
+}
+
 .video-wrap {
   position: relative;
   border: 1px solid #333;
