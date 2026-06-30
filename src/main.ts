@@ -14,8 +14,12 @@ import {
   COOLDOWN_MS_SLIDER_MAX,
   COOLDOWN_MS_SLIDER_MIN,
   COOLDOWN_MS_SLIDER_STEP,
-  DOT_MAX_MS_SLIDER_MAX,
-  DOT_MAX_MS_SLIDER_MIN,
+  DASH_RATIO_SLIDER_MAX,
+  DASH_RATIO_SLIDER_MIN,
+  DASH_RATIO_SLIDER_STEP,
+  DASH_RATIO_DEFAULT,
+  dashRatioToSlider,
+  sliderToDashRatio,
   EAR_CLOSED_DEFAULT,
   EAR_CLOSED_SLIDER_MAX,
   EAR_CLOSED_SLIDER_MIN,
@@ -28,7 +32,6 @@ import {
   MIN_BLINK_MS_SLIDER_MAX,
   MIN_BLINK_MS_SLIDER_MIN,
   MIN_BLINK_MS_SLIDER_STEP,
-  MORSE_DOT_DASH_THRESHOLD_MS,
   MORSE_LETTER_GAP_MS,
 } from './lib/morseTiming';
 import { formatCommittedText, lettersOnly } from './lib/wordSegment';
@@ -46,9 +49,9 @@ app.innerHTML = `
     <div id="video-wrap" class="video-wrap">
       <div class="video-controls">
         <div class="timing-control">
-          <label for="dot-max-ms">·/− ms</label>
-          <input type="range" id="dot-max-ms" min="${DOT_MAX_MS_SLIDER_MIN}" max="${DOT_MAX_MS_SLIDER_MAX}" step="10" value="${MORSE_DOT_DASH_THRESHOLD_MS}" />
-          <span id="dot-max-ms-val" class="timing-val">${MORSE_DOT_DASH_THRESHOLD_MS}</span>
+          <label for="dot-max-ms">·/− ×</label>
+          <input type="range" id="dot-max-ms" min="${DASH_RATIO_SLIDER_MIN}" max="${DASH_RATIO_SLIDER_MAX}" step="${DASH_RATIO_SLIDER_STEP}" value="${dashRatioToSlider(DASH_RATIO_DEFAULT)}" />
+          <span id="dot-max-ms-val" class="timing-val">${DASH_RATIO_DEFAULT.toFixed(1)}</span>
         </div>
         <div class="timing-control">
           <label for="letter-gap-ms">letter ms</label>
@@ -142,16 +145,33 @@ const COOLDOWN_MS_KEY = 'blinktype-cooldownMs';
 const MIN_BLINK_MS_KEY = 'blinktype-minBlinkMs';
 const EAR_CLOSED_KEY = 'blinktype-earClosed';
 
+function loadSavedDashRatioSlider(): number {
+  const saved = Number(localStorage.getItem(DOT_MAX_MS_KEY));
+  if (
+    Number.isFinite(saved) &&
+    saved >= DASH_RATIO_SLIDER_MIN &&
+    saved <= DASH_RATIO_SLIDER_MAX
+  ) {
+    return saved;
+  }
+  return dashRatioToSlider(DASH_RATIO_DEFAULT);
+}
+
+function formatDashRatioSlider(sliderVal: number): string {
+  return sliderToDashRatio(sliderVal).toFixed(1);
+}
+
 const blinkDetector = new BlinkDetector();
-bindMsSlider(
-  dotMaxMsInput,
-  dotMaxMsVal,
-  DOT_MAX_MS_KEY,
-  DOT_MAX_MS_SLIDER_MIN,
-  DOT_MAX_MS_SLIDER_MAX,
-  MORSE_DOT_DASH_THRESHOLD_MS,
-  (ms) => blinkDetector.setConfig({ dotMaxMs: ms }),
-);
+const initialDashRatioSlider = loadSavedDashRatioSlider();
+dotMaxMsInput.value = String(initialDashRatioSlider);
+dotMaxMsVal.textContent = formatDashRatioSlider(initialDashRatioSlider);
+blinkDetector.setConfig({ dashRatio: sliderToDashRatio(initialDashRatioSlider) });
+dotMaxMsInput.addEventListener('input', () => {
+  const v = Number(dotMaxMsInput.value);
+  dotMaxMsVal.textContent = formatDashRatioSlider(v);
+  blinkDetector.setConfig({ dashRatio: sliderToDashRatio(v) });
+  localStorage.setItem(DOT_MAX_MS_KEY, String(v));
+});
 
 const initialLetterGapMs = loadSavedMs(
   LETTER_GAP_MS_KEY,
