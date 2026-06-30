@@ -1,5 +1,5 @@
 import './styles.css';
-import { CalibrationSession, type TimingSnapshot } from './lib/calibration';
+import { CalibrationSession, openCalibrationTiming, type TimingSnapshot } from './lib/calibration';
 import { FaceLandmarkerEngine } from './lib/faceLandmarker';
 import { BlinkDetector, averageEar, selfieEarHudPixels, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
@@ -80,7 +80,6 @@ app.innerHTML = `
         <div id="cal-target" class="cal-target"></div>
         <div id="cal-morse" class="cal-morse"></div>
         <div id="cal-meta" class="cal-meta"></div>
-        <div id="cal-typed" class="cal-typed"></div>
       </div>
       <div class="video-mirror">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
@@ -103,7 +102,6 @@ const calibrationHud = document.querySelector<HTMLDivElement>('#calibration-hud'
 const calTarget = document.querySelector<HTMLDivElement>('#cal-target')!;
 const calMorse = document.querySelector<HTMLDivElement>('#cal-morse')!;
 const calMeta = document.querySelector<HTMLDivElement>('#cal-meta')!;
-const calTyped = document.querySelector<HTMLDivElement>('#cal-typed')!;
 const dotMaxMsInput = document.querySelector<HTMLInputElement>('#dot-max-ms')!;
 const dotMaxMsVal = document.querySelector<HTMLSpanElement>('#dot-max-ms-val')!;
 const letterGapMsInput = document.querySelector<HTMLInputElement>('#letter-gap-ms')!;
@@ -227,6 +225,8 @@ const headShakeDetector = new HeadShakeDetector();
 const morseAudio = new MorseAudio();
 const calibrationSession = new CalibrationSession();
 let calibrationActive = false;
+let savedTimingBeforeCal: TimingSnapshot | null = null;
+let accumulatedTuning: TimingSnapshot | null = null;
 let committedText = '';
 let pendingBuffer = '';
 
@@ -240,7 +240,20 @@ function getTimingSnapshot(): TimingSnapshot {
   };
 }
 
+function applyDetection(snapshot: TimingSnapshot): void {
+  const closed = snapshot.earClosed / 1000;
+  blinkDetector.setConfig({
+    dotMaxMs: snapshot.dotMaxMs,
+    cooldownMs: snapshot.cooldownMs,
+    minBlinkMs: snapshot.minBlinkMs,
+    closedThreshold: closed,
+    rearmThreshold: closed + EAR_REARM_DELTA,
+  });
+  morseMachine.setTiming({ letterGapMs: snapshot.letterGapMs });
+}
+
 function applyTimingSnapshot(snapshot: TimingSnapshot, persist = true): void {
+  applyDetection(snapshot);
   setSlider(
     dotMaxMsInput,
     dotMaxMsVal,
@@ -279,14 +292,18 @@ function applyTimingSnapshot(snapshot: TimingSnapshot, persist = true): void {
     EAR_CLOSED_KEY,
     snapshot.earClosed,
     (v) => {
-      const closed = v / 1000;
+      const c = v / 1000;
       blinkDetector.setConfig({
-        closedThreshold: closed,
-        rearmThreshold: closed + EAR_REARM_DELTA,
+        closedThreshold: c,
+        rearmThreshold: c + EAR_REARM_DELTA,
       });
     },
     persist,
   );
+}
+
+function applyOpenCalibrationDetection(): void {
+  applyDetection(openCalibrationTiming());
 }
 
 function updateCalibrationHud(note = ''): void {
@@ -301,25 +318,26 @@ function updateCalibrationHud(note = ''): void {
   ]
     .filter(Boolean)
     .join('  ·  ');
-  calTyped.textContent = calibrationSession.typedSoFar
-    ? `you: ${calibrationSession.typedSoFar}`
-    : 'you: —';
 }
 
 function startCalibration(): void {
   calibrationActive = true;
+  savedTimingBeforeCal = getTimingSnapshot();
+  accumulatedTuning = { ...savedTimingBeforeCal };
   calibrationSession.reset();
   morseMachine.reset();
   pendingBuffer = '';
   syncOutput();
+  applyOpenCalibrationDetection();
   calibrationHud.hidden = false;
   videoWrap.classList.add('calibrating');
   calibrateBtn.textContent = 'done';
   calibrateBtn.classList.add('active');
-  updateCalibrationHud('blink the word in morse');
+  updateCalibrationHud('open detection — blink the word');
 }
 
 function stopCalibration(message = ''): void {
+  const hadRounds = calibrationSession.results.length > 0;
   calibrationActive = false;
   calibrationHud.hidden = true;
   videoWrap.classList.remove('calibrating');
@@ -327,7 +345,17 @@ function stopCalibration(message = ''): void {
   calibrateBtn.classList.remove('active');
   morseMachine.reset();
   pendingBuffer = '';
+
+  if (hadRounds && accumulatedTuning) {
+    applyTimingSnapshot(accumulatedTuning, true);
+  } else if (savedTimingBeforeCal) {
+    applyTimingSnapshot(savedTimingBeforeCal, false);
+  }
+
+  savedTimingBeforeCal = null;
+  accumulatedTuning = null;
   syncOutput();
+
   if (message) {
     calMeta.textContent = message;
     calibrationHud.hidden = false;
@@ -343,8 +371,11 @@ function onCalibrationLetter(event: MorseCommitEvent): void {
 
   if (!wordDone) return;
 
-  const result = calibrationSession.finishRound(getTimingSnapshot());
+  const baseline = accumulatedTuning ?? getTimingSnapshot();
+  const result = calibrationSession.finishRound(baseline);
+  accumulatedTuning = result.tuning;
   applyTimingSnapshot(result.tuning, true);
+  applyOpenCalibrationDetection();
   morseMachine.reset();
   pendingBuffer = '';
   updateCalibrationHud(`${result.accuracy}% · sliders updated`);
@@ -421,11 +452,7 @@ const morseMachine = new MorseStateMachine(
   },
   (buffer) => {
     pendingBuffer = buffer;
-    if (calibrationActive) {
-      calibrationSession.onBufferChange(buffer);
-      updateCalibrationHud();
-      return;
-    }
+    if (calibrationActive) return;
     syncOutput();
   },
 );

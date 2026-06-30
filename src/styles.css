@@ -93,6 +93,11 @@ body {
   outline-offset: -1px;
 }
 
+.video-wrap.calibrating .video-controls {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 .cal-target {
   font-size: 1.6em;
   letter-spacing: 0.08em;
@@ -106,10 +111,6 @@ body {
 .cal-meta {
   font-size: 10px;
   opacity: 0.75;
-}
-
-.cal-typed {
-  font-size: 1.1em;
 }
 
 .video-wrap {
