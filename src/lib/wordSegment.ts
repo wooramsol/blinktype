@@ -21,7 +21,7 @@ function longestWordAt(s: string, start: number): string | null {
  * until a later known word is found (e.g. helloxyzworld → hello xyz world).
  */
 export function segmentIncremental(run: string): string {
-  const s = run.toLowerCase().replace(/[^a-z]/g, '');
+  const s = run.toLowerCase().replace(/[^a-z0-9]/g, '');
   if (!s) return '';
 
   const parts: string[] = [];
@@ -68,7 +68,7 @@ export function formatCommittedText(committed: string): string {
     .join(' ');
 }
 
-/** Strip non-letters; used when the user edits the textarea. */
+/** Strip everything except letters and digits; used when the user edits the textarea. */
 export function lettersOnly(input: string): string {
-  return input.toLowerCase().replace(/[^a-z]/g, '');
+  return input.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
