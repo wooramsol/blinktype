@@ -78,6 +78,10 @@ app.innerHTML = `
       <div id="ear-label" class="ear-label ear-hud-left" hidden>E —</div>
     </div>
     <textarea id="output" rows="8" spellcheck="false"></textarea>
+    <footer class="site-footer">
+      Like this? Explore my other projects at
+      <a href="https://wooramsol.com" target="_blank" rel="noopener">wooramsol.com&nbsp;&rarr;</a>
+    </footer>
   </div>
 `;
 
