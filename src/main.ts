@@ -284,7 +284,8 @@ function positionEarLabel(landmarks: { x: number; y: number }[]): void {
   const h = videoWrap.clientHeight;
   if (w === 0 || h === 0) return;
 
-  const ear = averageEar(landmarks);
+  const aspect = video.videoHeight > 0 ? video.videoWidth / video.videoHeight : undefined;
+  const ear = averageEar(landmarks, aspect);
   const { screenLeft } = selfieEarHudPixels(landmarks, w, h);
 
   earLabel.textContent = `E ${ear.toFixed(3)}`;
@@ -354,7 +355,9 @@ async function loop(): Promise<void> {
 
       positionEarLabel(frame.landmarks);
 
-      const eyes = selfieScreenEyes(frame.landmarks);
+      const aspect =
+        video.videoHeight > 0 ? video.videoWidth / video.videoHeight : undefined;
+      const eyes = selfieScreenEyes(frame.landmarks, aspect);
       const blink = blinkDetector.update(eyes.screenLeft.ear, eyes.screenRight.ear, now);
       if (blink) {
         morseAudio.play(blink.symbol);
