@@ -104,7 +104,9 @@ function loadSavedMs(
   max: number,
   fallback: number,
 ): number {
-  const saved = Number(localStorage.getItem(key));
+  const raw = localStorage.getItem(key);
+  if (raw === null || raw === '') return fallback;
+  const saved = Number(raw);
   return Number.isFinite(saved) && saved >= min && saved <= max ? saved : fallback;
 }
 
