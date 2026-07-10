@@ -29,16 +29,35 @@ function centroid(points: Point2D[]): Point2D {
   return { x: x / n, y: y / n };
 }
 
-export function eyeAspectRatio(landmarks: Point2D[], indices: readonly number[]): number {
-  const [p1, p2, p3, p4, p5, p6] = indices.map((i) => landmarks[i]);
+/**
+ * Reference aspect ratio (16:9). EAR is computed in true geometric space
+ * (aspect-corrected), then scaled so values match the legacy calibration
+ * that was done on 16:9 desktop webcams. This makes EAR consistent across
+ * devices and orientations (e.g. portrait phone cameras).
+ */
+export const REF_ASPECT = 16 / 9;
+
+export function eyeAspectRatio(
+  landmarks: Point2D[],
+  indices: readonly number[],
+  aspect: number = REF_ASPECT,
+): number {
+  const [p1, p2, p3, p4, p5, p6] = indices.map((i) => ({
+    x: landmarks[i].x * aspect,
+    y: landmarks[i].y,
+  }));
   const vertical = dist(p2, p6) + dist(p3, p5);
   const horizontal = dist(p1, p4);
   if (horizontal === 0) return 1;
-  return vertical / (2 * horizontal);
+  return (vertical / (2 * horizontal)) * REF_ASPECT;
 }
 
-export function averageEar(landmarks: Point2D[]): number {
-  return (eyeAspectRatio(landmarks, LEFT_EYE) + eyeAspectRatio(landmarks, RIGHT_EYE)) / 2;
+export function averageEar(landmarks: Point2D[], aspect: number = REF_ASPECT): number {
+  return (
+    (eyeAspectRatio(landmarks, LEFT_EYE, aspect) +
+      eyeAspectRatio(landmarks, RIGHT_EYE, aspect)) /
+    2
+  );
 }
 
 /** Push landmark indices outward from their region centroid (overlay). */
@@ -86,17 +105,17 @@ function selfieViewX(landmarkX: number): number {
   return 1 - landmarkX;
 }
 
-function mpLeftEye(landmarks: Point2D[]): ScreenEye {
+function mpLeftEye(landmarks: Point2D[], aspect: number): ScreenEye {
   return {
-    ear: eyeAspectRatio(landmarks, LEFT_EYE),
+    ear: eyeAspectRatio(landmarks, LEFT_EYE, aspect),
     outer: landmarks[33],
     centerY: leftEyeCenterY(landmarks),
   };
 }
 
-function mpRightEye(landmarks: Point2D[]): ScreenEye {
+function mpRightEye(landmarks: Point2D[], aspect: number): ScreenEye {
   return {
-    ear: eyeAspectRatio(landmarks, RIGHT_EYE),
+    ear: eyeAspectRatio(landmarks, RIGHT_EYE, aspect),
     outer: landmarks[263],
     centerY: rightEyeCenterY(landmarks),
   };
@@ -105,12 +124,15 @@ function mpRightEye(landmarks: Point2D[]): ScreenEye {
 /**
  * Selfie preview: screen-left / screen-right eye slots for HUD placement.
  */
-export function selfieScreenEyes(landmarks: Point2D[]): {
+export function selfieScreenEyes(
+  landmarks: Point2D[],
+  aspect: number = REF_ASPECT,
+): {
   screenLeft: ScreenEye;
   screenRight: ScreenEye;
 } {
-  const mpLeft = mpLeftEye(landmarks);
-  const mpRight = mpRightEye(landmarks);
+  const mpLeft = mpLeftEye(landmarks, aspect);
+  const mpRight = mpRightEye(landmarks, aspect);
 
   const leftOnScreen = selfieViewX(eyeCenterX(landmarks, 133, 33));
   const rightOnScreen = selfieViewX(eyeCenterX(landmarks, 362, 263));
