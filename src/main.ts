@@ -46,27 +46,27 @@ app.innerHTML = `
     <div id="video-wrap" class="video-wrap">
       <div class="video-controls">
         <div class="timing-control">
-          <label for="dot-max-ms" title="Shorter than this = dot (·), longer = dash (−)">·/− ms</label>
+          <label for="dot-max-ms" title="Shorter than this = dot (·), longer = dash (−)">·/− ms<span class="tip-icon">?</span></label>
           <input type="range" id="dot-max-ms" min="${DOT_MAX_MS_SLIDER_MIN}" max="${DOT_MAX_MS_SLIDER_MAX}" step="10" value="${MORSE_DOT_DASH_THRESHOLD_MS}" />
           <span id="dot-max-ms-val" class="timing-val">${MORSE_DOT_DASH_THRESHOLD_MS}</span>
         </div>
         <div class="timing-control">
-          <label for="letter-gap-ms" title="Wait time after your last blink before the letter is confirmed">letter ms</label>
+          <label for="letter-gap-ms" title="Wait time after your last blink before the letter is confirmed">letter ms<span class="tip-icon">?</span></label>
           <input type="range" id="letter-gap-ms" min="${LETTER_GAP_MS_SLIDER_MIN}" max="${LETTER_GAP_MS_SLIDER_MAX}" step="${LETTER_GAP_MS_SLIDER_STEP}" value="${MORSE_LETTER_GAP_MS}" />
           <span id="letter-gap-ms-val" class="timing-val">${MORSE_LETTER_GAP_MS}</span>
         </div>
         <div class="timing-control">
-          <label for="cooldown-ms" title="Minimum gap between blinks — stops fast blinks merging into one">gap ms</label>
+          <label for="cooldown-ms" title="Minimum gap between blinks — stops fast blinks merging into one">gap ms<span class="tip-icon">?</span></label>
           <input type="range" id="cooldown-ms" min="${COOLDOWN_MS_SLIDER_MIN}" max="${COOLDOWN_MS_SLIDER_MAX}" step="${COOLDOWN_MS_SLIDER_STEP}" value="${COOLDOWN_MS_DEFAULT}" />
           <span id="cooldown-ms-val" class="timing-val">${COOLDOWN_MS_DEFAULT}</span>
         </div>
         <div class="timing-control">
-          <label for="min-blink-ms" title="Blinks shorter than this are ignored as noise">min ms</label>
+          <label for="min-blink-ms" title="Blinks shorter than this are ignored as noise">min ms<span class="tip-icon">?</span></label>
           <input type="range" id="min-blink-ms" min="${MIN_BLINK_MS_SLIDER_MIN}" max="${MIN_BLINK_MS_SLIDER_MAX}" step="${MIN_BLINK_MS_SLIDER_STEP}" value="${MIN_BLINK_MS_DEFAULT}" />
           <span id="min-blink-ms-val" class="timing-val">${MIN_BLINK_MS_DEFAULT}</span>
         </div>
         <div class="timing-control">
-          <label for="ear-closed" title="How closed your eye needs to be to count as a blink">EAR</label>
+          <label for="ear-closed" title="How closed your eye needs to be to count as a blink">EAR<span class="tip-icon">?</span></label>
           <input type="range" id="ear-closed" min="${EAR_CLOSED_SLIDER_MIN}" max="${EAR_CLOSED_SLIDER_MAX}" step="${EAR_CLOSED_SLIDER_STEP}" value="${EAR_CLOSED_DEFAULT}" />
           <span id="ear-closed-val" class="timing-val">${EAR_CLOSED_DEFAULT}</span>
         </div>
