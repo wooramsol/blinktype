@@ -3,6 +3,7 @@ import { FaceLandmarkerEngine } from './lib/faceLandmarker';
 import { BlinkDetector, averageEar, selfieEarHudPixels, selfieScreenEyes } from './lib/eyeBlink';
 import { clearFaceOverlay, drawFaceOverlay, resizeOverlayCanvas } from './lib/faceOverlay';
 import { HeadShakeDetector, noseOffsetX } from './lib/headShake';
+import { MORSE_TABLE } from './lib/morse';
 import {
   MorseStateMachine,
   morseToDisplay,
@@ -77,7 +78,8 @@ app.innerHTML = `
       </div>
       <div id="ear-label" class="ear-label ear-hud-left" hidden>E —</div>
     </div>
-    <textarea id="output" rows="8" spellcheck="false"></textarea>
+    <textarea id="output" rows="4" spellcheck="false"></textarea>
+    <div id="morse-chart" class="morse-chart"></div>
     <footer class="site-footer">
       Like this? Explore my other projects at
       <a href="https://wooramsol.com" target="_blank" rel="noopener">wooramsol.com&nbsp;&rarr;</a>
@@ -86,6 +88,24 @@ app.innerHTML = `
 `;
 
 const videoWrap = document.querySelector<HTMLDivElement>('#video-wrap')!;
+
+// Morse reference chart (A-Z, 0-9), generated from MORSE_TABLE.
+(() => {
+  const chart = document.querySelector<HTMLDivElement>('#morse-chart')!;
+  const toDisplay = (code: string): string =>
+    code.replace(/\./g, '\u00b7').replace(/-/g, '\u2212');
+  const entries = Object.entries(MORSE_TABLE)
+    .filter(([, ch]) => /^[A-Z0-9]$/.test(ch))
+    .sort(([, a], [, b]) => {
+      const digitA = /[0-9]/.test(a);
+      const digitB = /[0-9]/.test(b);
+      if (digitA !== digitB) return digitA ? 1 : -1;
+      return a.localeCompare(b);
+    });
+  chart.innerHTML = entries
+    .map(([code, ch]) => `<span class="mc"><b>${ch}</b>${toDisplay(code)}</span>`)
+    .join('');
+})();
 const video = document.querySelector<HTMLVideoElement>('#video')!;
 const overlay = document.querySelector<HTMLCanvasElement>('#overlay')!;
 const overlayCtx = overlay.getContext('2d')!;
